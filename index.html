@@ -53,12 +53,16 @@
     .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .metric-box {
       background: var(--card-inner);
-      padding: 10px;
+      padding: 10px 8px;
       border-radius: 10px;
       text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
     }
     .metric-title { font-size: 0.72rem; color: var(--text-sub); margin-bottom: 2px; }
-    .metric-val { font-size: 1.15rem; font-weight: 700; }
+    .formula-hint { font-size: 0.62rem; color: #38bdf8; opacity: 0.85; display: block; margin-top: 1px; }
+    .metric-val { font-size: 1.15rem; font-weight: 700; margin: 4px 0 2px 0; }
     
     .highlight-green { color: var(--accent-green); }
     .highlight-orange { color: var(--accent-orange); }
@@ -191,22 +195,34 @@
       <div class="hero-sub" id="mealsRemainingDisplay">週期共 0 天 · 剩餘 0 天 · 剩餘 0 餐配額</div>
     </div>
 
-    <!-- 三大資金池即時監控 -->
+    <!-- 三大資金池即時監控 (帶公式標示) -->
     <div class="card metric-grid">
       <div class="metric-box">
-        <div class="metric-title">🌊 剩餘流動資金</div>
+        <div>
+          <div class="metric-title">🌊 剩餘流動資金</div>
+          <span class="formula-hint">(週期天數×300 - 旅費 - 支出)</span>
+        </div>
         <div class="metric-val highlight-blue" id="liquidFundDisplay">¥ 0</div>
       </div>
       <div class="metric-box">
-        <div class="metric-title">🛡️ 剩餘初始底金 (含薪水/超額實扣)</div>
+        <div>
+          <div class="metric-title">🛡️ 剩餘初始底金</div>
+          <span class="formula-hint">(本金 - 週期×300 + 薪水 - 超額)</span>
+        </div>
         <div class="metric-val highlight-orange" id="safeBaseFundDisplay">¥ 0</div>
       </div>
       <div class="metric-box">
-        <div class="metric-title">💵 實際戶頭總金額 (當前現金)</div>
+        <div>
+          <div class="metric-title">💵 實際戶頭總額</div>
+          <span class="formula-hint">(本金 + 已入實收 - 已發實支)</span>
+        </div>
         <div class="metric-val highlight-green" id="actualAccountDisplay">¥ 0</div>
       </div>
       <div class="metric-box">
-        <div class="metric-title">✈️ 鎖定旅遊專款</div>
+        <div>
+          <div class="metric-title">✈️ 鎖定旅遊專款</div>
+          <span class="formula-hint">(設定預留固定款)</span>
+        </div>
         <div class="metric-val highlight-purple" id="tripLockedDisplay">¥ 0</div>
       </div>
     </div>
@@ -516,7 +532,7 @@
       // 5. 每餐配額
       const mealBudget = remainingLiquid > 0 ? (remainingLiquid / totalMealsRemaining) : 0;
 
-      // 介面更新 (副標題不顯示已消耗餐數)
+      // 介面更新
       document.getElementById('mealBudgetDisplay').innerText = `¥ ${mealBudget.toFixed(1)}`;
       document.getElementById('mealsRemainingDisplay').innerText = `週期共 ${totalCycleDays} 天 · 剩餘 ${remainingDays} 天 · 剩餘 ${totalMealsRemaining} 餐配額`;
 
