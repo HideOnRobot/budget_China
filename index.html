@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="外派記帳" />
+  <title>外派動態預算與記帳器</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --card-inner: #334155;
+      --text-main: #f8fafc;
+      --text-sub: #94a3b8;
+      --accent: #38bdf8;
+      --accent-green: #4ade80;
+      --accent-orange: #fb923c;
+      --accent-red: #f87171;
+      --border: #475569;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      padding: env(safe-area-inset-top, 20px) 14px calc(env(safe-area-inset-bottom, 20px) + 20px) 14px;
+      display: flex;
+      justify-content: center;
+    }
+    .container { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 14px; }
+    h1 { font-size: 1.25rem; font-weight: 700; text-align: center; color: var(--accent); }
+    
+    .card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--border);
+    }
+    
+    .hero-card {
+      background: linear-gradient(135deg, #1e293b, #09101f);
+      border: 1.5px solid var(--accent);
+      text-align: center;
+      padding: 18px 14px;
+    }
+    .hero-label { font-size: 0.85rem; color: var(--text-sub); }
+    .hero-value { font-size: 2.3rem; font-weight: 800; color: var(--accent-green); margin: 4px 0; }
+    .hero-sub { font-size: 0.8rem; color: var(--text-sub); }
+
+    .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .metric-box {
+      background: var(--card-inner);
+      padding: 10px;
+      border-radius: 10px;
+      text-align: center;
+    }
+    .metric-title { font-size: 0.72rem; color: var(--text-sub); margin-bottom: 2px; }
+    .metric-val { font-size: 1.15rem; font-weight: 700; }
+    
+    .highlight-green { color: var(--accent-green); }
+    .highlight-orange { color: var(--accent-orange); }
+    .highlight-blue { color: var(--accent); }
+    .highlight-red { color: var(--accent-red); }
+
+    .form-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+    .form-group:last-child { margin-bottom: 0; }
+    label { font-size: 0.78rem; color: var(--text-sub); }
+    input, select, button {
+      background: var(--card-inner);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 10px;
+      color: var(--text-main);
+      font-size: 0.9rem;
+      outline: none;
+    }
+    input:focus, select:focus { border-color: var(--accent); }
+    .row { display: flex; gap: 10px; }
+    .row .form-group { flex: 1; }
+
+    button.btn-primary {
+      background: var(--accent);
+      color: #0f172a;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      width: 100%;
+      padding: 11px;
+      border-radius: 10px;
+      margin-top: 4px;
+    }
+    button.btn-primary:active { opacity: 0.85; }
+
+    .record-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .record-title { font-size: 0.95rem; font-weight: 700; color: var(--text-main); }
+    .record-list { display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; }
+    .record-item {
+      background: var(--card-inner);
+      border-radius: 8px;
+      padding: 9px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+    }
+    .record-left { display: flex; flex-direction: column; gap: 2px; }
+    .record-tag { font-size: 0.7rem; color: var(--text-sub); }
+    .record-badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: #475569;
+      margin-left: 4px;
+    }
+    .badge-future { background: #b45309; color: #fef3c7; }
+    .record-right { display: flex; align-items: center; gap: 8px; }
+    .record-amt { font-weight: 700; font-size: 0.95rem; }
+    .btn-del {
+      background: transparent;
+      border: none;
+      color: var(--text-sub);
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 2px 6px;
+    }
+    .btn-del:active { color: var(--accent-red); }
+
+    details { border-radius: 8px; }
+    summary { font-size: 0.82rem; color: var(--text-sub); cursor: pointer; padding: 4px 0; outline: none; }
+    .backup-row { display: flex; gap: 8px; margin-top: 10px; }
+    .btn-sm { flex: 1; padding: 8px; font-size: 0.78rem; background: var(--card-inner); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; color: var(--text-main); }
+    .btn-sm:active { background: var(--border); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>外派記帳 & 旅遊預算動態器</h1>
+
+    <div class="card hero-card">
+      <div class="hero-label">在出發旅遊前・每餐預算配額</div>
+      <div class="hero-value" id="mealBudgetDisplay">¥ 0.0</div>
+      <div class="hero-sub" id="dailyTotalDisplay">每日可用餐費：¥ 0.0 (以1天3餐計算)</div>
+    </div>
+
+    <div class="card metric-grid">
+      <div class="metric-box">
+        <div class="metric-title">目前累計實質餘額 (RMB)</div>
+        <div class="metric-val highlight-blue" id="currentRealBalanceDisplay">¥ 0</div>
+      </div>
+      <div class="metric-box">
+        <div class="metric-title">距出發旅遊剩餘天數</div>
+        <div class="metric-val highlight-orange" id="remainingDaysDisplay">0 天</div>
+      </div>
+      <div class="metric-box">
+        <div class="metric-title">待發放加給預估 (RMB)</div>
+        <div class="metric-val highlight-green" id="futureAllowanceDisplay">¥ 0</div>
+      </div>
+      <div class="metric-box">
+        <div class="metric-title">已預扣未來款項 (RMB)</div>
+        <div class="metric-val highlight-red" id="futureExpensesDisplay">¥ 0</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="record-title" style="margin-bottom: 8px;">新增收支 / 預定款項</div>
+      <div class="row">
+        <div class="form-group" style="flex: 0.8;">
+          <label>類型</label>
+          <select id="txType">
+            <option value="expense">支出 (-)</option>
+            <option value="income">收入 (+)</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex: 1.2;">
+          <label>金額與幣別</label>
+          <div style="display: flex; gap: 4px;">
+            <input type="number" id="txAmount" placeholder="金額" style="flex: 1;" />
+            <select id="txCurrency" style="width: 70px;">
+              <option value="RMB">RMB</option>
+              <option value="HKD">HKD</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="form-group">
+          <label>日期 (可設未來預計付的款)</label>
+          <input type="date" id="txDate" />
+        </div>
+        <div class="form-group">
+          <label>分類</label>
+          <select id="txCategory">
+            <option value="餐飲日常">餐飲日常</option>
+            <option value="大型購物">大型購物 (如包包)</option>
+            <option value="交通住宿">交通住宿</option>
+            <option value="他人轉帳">他人轉帳/還款</option>
+            <option value="其他雜項">其他雜項</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>備註說明</label>
+        <input type="text" id="txRemark" placeholder="例：預定高鐵票、買禮物、同事轉帳" />
+      </div>
+
+      <button class="btn-primary" id="addTxBtn">記入帳本並重新試算</button>
+    </div>
+
+    <div class="card">
+      <div class="record-header">
+        <div class="record-title">收支與預定清單 (<span id="recordCount">0</span>)</div>
+      </div>
+      <div class="record-list" id="recordList"></div>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary>⚙️ 基礎參數設定 (起算日/加給/旅遊預算)</summary>
+        <div style="margin-top: 10px;">
+          <div class="row">
+            <div class="form-group">
+              <label>起算日 (抵達大陸)</label>
+              <input type="date" id="startDateInput" value="2026-10-12" />
+            </div>
+            <div class="form-group">
+              <label>預計出發旅遊日</label>
+              <input type="date" id="tripDateInput" value="2026-11-12" />
+            </div>
+          </div>
+          <div class="row">
+            <div class="form-group">
+              <label>初始基底本金 (RMB)</label>
+              <input type="number" id="baseBalanceInput" value="1000" />
+            </div>
+            <div class="form-group">
+              <label>旅遊預定保留款 (RMB)</label>
+              <input type="number" id="tripFundInput" value="2500" />
+            </div>
+          </div>
+          <div class="row">
+            <div class="form-group">
+              <label>每日在陸加給 (HKD)</label>
+              <input type="number" id="dailyHkdInput" value="300" />
+            </div>
+            <div class="form-group">
+              <label>換匯匯率估算 (HKD 換 RMB)</label>
+              <input type="number" id="rateInput" value="0.92" step="0.01" />
+            </div>
+          </div>
+
+          <div class="backup-row">
+            <button class="btn-sm" onclick="triggerShortcutBackup()">📲 捷徑一鍵備份</button>
+            <button class="btn-sm" onclick="triggerShortcutRestore()">📥 捷徑一鍵復原</button>
+          </div>
+          <div class="backup-row" style="margin-top: 6px;">
+            <button class="btn-sm" style="opacity: 0.7;" onclick="manualExport()">手動複製文字備份</button>
+          </div>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <script>
+    const CONFIG_KEY = 'hk_expat_config_v2';
+    const RECORDS_KEY = 'hk_expat_records_v2';
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    document.getElementById('txDate').value = todayStr;
+
+    function loadConfig() {
+      const saved = localStorage.getItem(CONFIG_KEY);
+      if (saved) {
+        try {
+          const cfg = JSON.parse(saved);
+          ['startDateInput','tripDateInput','baseBalanceInput','tripFundInput','dailyHkdInput','rateInput'].forEach(k => {
+            if (cfg[k] !== undefined) document.getElementById(k).value = cfg[k];
+          });
+        } catch(e) {}
+      }
+    }
+
+    function saveConfig() {
+      const cfg = {};
+      ['startDateInput','tripDateInput','baseBalanceInput','tripFundInput','dailyHkdInput','rateInput'].forEach(k => {
+        cfg[k] = document.getElementById(k).value;
+      });
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
+    }
+
+    function getRecords() {
+      const data = localStorage.getItem(RECORDS_KEY);
+      return data ? JSON.parse(data) : [];
+    }
+
+    function saveRecords(records) {
+      localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
+    }
+
+    document.getElementById('addTxBtn').addEventListener('click', () => {
+      const amt = parseFloat(document.getElementById('txAmount').value);
+      if (!amt || amt <= 0) {
+        alert('請輸入有效金額');
+        return;
+      }
+
+      const newRecord = {
+        id: Date.now(),
+        type: document.getElementById('txType').value,
+        amount: amt,
+        currency: document.getElementById('txCurrency').value,
+        date: document.getElementById('txDate').value || todayStr,
+        category: document.getElementById('txCategory').value,
+        remark: document.getElementById('txRemark').value.trim() || '未備註'
+      };
+
+      const records = getRecords();
+      records.unshift(newRecord);
+      saveRecords(records);
+
+      document.getElementById('txAmount').value = '';
+      document.getElementById('txRemark').value = '';
+      calculate();
+    });
+
+    function deleteRecord(id) {
+      let records = getRecords();
+      records = records.filter(r => r.id !== id);
+      saveRecords(records);
+      calculate();
+    }
+
+    function calculate() {
+      saveConfig();
+      const rate = parseFloat(document.getElementById('rateInput').value) || 0.92;
+      const baseBalance = parseFloat(document.getElementById('baseBalanceInput').value) || 0;
+      const tripFund = parseFloat(document.getElementById('tripFundInput').value) || 0;
+      const dailyHkd = parseFloat(document.getElementById('dailyHkdInput').value) || 0;
+      
+      const tripDate = new Date(document.getElementById('tripDateInput').value);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      tripDate.setHours(0, 0, 0, 0);
+
+      const remainingDays = Math.max(1, Math.round((tripDate - today) / (1000 * 60 * 60 * 24)));
+      const futureAllowanceRMB = remainingDays * (dailyHkd * rate);
+
+      const records = getRecords();
+      let realBalance = baseBalance;
+      let futureLockedNet = 0;
+
+      records.forEach(r => {
+        const valRMB = r.currency === 'HKD' ? (r.amount * rate) : r.amount;
+        const rDate = new Date(r.date);
+        rDate.setHours(0, 0, 0, 0);
+
+        const isFuture = rDate > today;
+
+        if (!isFuture) {
+          if (r.type === 'expense') realBalance -= valRMB;
+          if (r.type === 'income') realBalance += valRMB;
+        } else {
+          if (r.type === 'expense') futureLockedNet += valRMB;
+          if (r.type === 'income') futureLockedNet -= valRMB;
+        }
+      });
+
+      const netBudgetForFood = (realBalance + futureAllowanceRMB) - tripFund - futureLockedNet;
+      const dailyBudget = netBudgetForFood > 0 ? (netBudgetForFood / remainingDays) : 0;
+      const mealBudget = dailyBudget / 3;
+
+      document.getElementById('mealBudgetDisplay').innerText = `¥ ${mealBudget.toFixed(1)}`;
+      document.getElementById('dailyTotalDisplay').innerText = `每日可用餐費：¥ ${dailyBudget.toFixed(1)} (距出發還有 ${remainingDays} 天)`;
+      document.getElementById('currentRealBalanceDisplay').innerText = `¥ ${Math.round(realBalance)}`;
+      document.getElementById('remainingDaysDisplay').innerText = `${remainingDays} 天`;
+      document.getElementById('futureAllowanceDisplay').innerText = `¥ ${Math.round(futureAllowanceRMB)}`;
+      document.getElementById('futureExpensesDisplay').innerText = `¥ ${Math.round(futureLockedNet)}`;
+
+      renderRecordList(records, today);
+    }
+
+    function renderRecordList(records, today) {
+      const listEl = document.getElementById('recordList');
+      document.getElementById('recordCount').innerText = records.length;
+      listEl.innerHTML = '';
+
+      if (records.length === 0) {
+        listEl.innerHTML = '<div style="text-align:center; color:var(--text-sub); font-size:0.8rem; padding: 10px;">目前尚無紀錄</div>';
+        return;
+      }
+
+      records.forEach(r => {
+        const rDate = new Date(r.date);
+        rDate.setHours(0, 0, 0, 0);
+        const isFuture = rDate > today;
+        
+        const item = document.createElement('div');
+        item.className = 'record-item';
+
+        const isExp = r.type === 'expense';
+        const sign = isExp ? '-' : '+';
+        const amtColor = isExp ? 'var(--accent-orange)' : 'var(--accent-green)';
+
+        item.innerHTML = `
+          <div class="record-left">
+            <div>
+              <strong>${r.remark}</strong>
+              ${isFuture ? '<span class="record-badge badge-future">預定款</span>' : ''}
+            </div>
+            <div class="record-tag">${r.date} · ${r.category}</div>
+          </div>
+          <div class="record-right">
+            <span class="record-amt" style="color:${amtColor}">
+              ${sign}${r.amount} ${r.currency}
+            </span>
+            <button class="btn-del" onclick="deleteRecord(${r.id})">✕</button>
+          </div>
+        `;
+        listEl.appendChild(item);
+      });
+    }
+
+    // 取得打包資料
+    function getExportPayload() {
+      return JSON.stringify({
+        config: localStorage.getItem(CONFIG_KEY),
+        records: localStorage.getItem(RECORDS_KEY),
+        time: new Date().toISOString()
+      });
+    }
+
+    // 解析並寫入資料
+    function applyImportPayload(jsonStr) {
+      try {
+        const bundle = JSON.parse(jsonStr);
+        if (bundle.config) localStorage.setItem(CONFIG_KEY, bundle.config);
+        if (bundle.records) localStorage.setItem(RECORDS_KEY, bundle.records);
+        loadConfig();
+        calculate();
+        return true;
+      } catch(e) {
+        return false;
+      }
+    }
+
+    // 1. 捷徑一鍵備份
+    function triggerShortcutBackup() {
+      const payload = getExportPayload();
+      const encoded = encodeURIComponent(payload);
+      // 呼叫「外派記帳備份」捷徑並傳入 payload
+      window.location.href = `shortcuts://run-shortcut?name=${encodeURIComponent('外派記帳備份')}&input=text&text=${encoded}`;
+    }
+
+    // 2. 捷徑一鍵復原
+    async function triggerShortcutRestore() {
+      // 詢問使用者是否要啟動還原流程
+      const confirmAction = confirm('將自動呼叫捷徑讀取備份並複製到剪貼簿。點擊「確定」後會短暫開啟捷徑，完成後請點回本頁面。');
+      if (confirmAction) {
+        // 先啟動捷徑將檔案內容拷貝到剪貼板
+        window.location.href = `shortcuts://run-shortcut?name=${encodeURIComponent('外派記帳還原')}`;
+        
+        // 延遲監聽或提示使用者貼上
+        setTimeout(async () => {
+          try {
+            const clipText = await navigator.clipboard.readText();
+            if (applyImportPayload(clipText)) {
+              alert('已成功從剪貼簿讀取備份並還原！');
+            } else {
+              manualImportPrompt();
+            }
+          } catch (err) {
+            manualImportPrompt();
+          }
+        }, 1500);
+      }
+    }
+
+    function manualImportPrompt() {
+      const paste = prompt('若未自動貼上，請在此貼上備份內容 (JSON)：');
+      if (paste && applyImportPayload(paste)) {
+        alert('資料還原成功！');
+      }
+    }
+
+    // 手動備用導出
+    function manualExport() {
+      const payload = getExportPayload();
+      navigator.clipboard.writeText(payload).then(() => {
+        alert('備份字串已複製到剪貼簿！');
+      }).catch(() => {
+        prompt('請手動複製以下字串：', payload);
+      });
+    }
+
+    ['startDateInput','tripDateInput','baseBalanceInput','tripFundInput','dailyHkdInput','rateInput'].forEach(id => {
+      document.getElementById(id).addEventListener('input', calculate);
+    });
+
+    loadConfig();
+    calculate();
+  </script>
+</body>
+</html>
