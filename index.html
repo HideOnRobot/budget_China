@@ -174,7 +174,7 @@
       <div class="hero-sub" id="mealsRemainingDisplay">距出發剩餘 0 天 · 剩餘 0 餐可吃</div>
     </div>
 
-    <!-- 🌟 新增：實際資產 vs 預計剩餘總資產 雙軌儀表板 🌟 -->
+    <!-- 雙軌資產儀表板 -->
     <div class="card metric-grid">
       <div class="metric-box">
         <div class="metric-title">💵 當前實際總資產 (口袋現金)</div>
@@ -231,14 +231,15 @@
             <option value="交通住宿">🚄 交通住宿</option>
             <option value="社交娛樂">🎉 社交娛樂</option>
             <option value="生活雜項">📦 生活雜項</option>
-            <option value="他人轉帳">💸 他人轉帳/薪水入帳</option>
+            <option value="他人轉帳">💸 他人轉帳/代墊還款 (增加預計總資產)</option>
+            <option value="薪水入帳">💼 薪水/加給實發 (僅加現金，不重複計入)</option>
           </select>
         </div>
       </div>
 
       <div class="form-group">
         <label>備註說明</label>
-        <input type="text" id="txRemark" placeholder="例：早餐小籠包、發薪入帳、預定高鐵" />
+        <input type="text" id="txRemark" placeholder="例：早餐小籠包、朋友還高鐵錢、10月前半加給" />
       </div>
 
       <button class="btn-primary" id="addTxBtn">記入帳本並動態平攤</button>
@@ -330,7 +331,8 @@
       '交通住宿': '#fb923c',
       '社交娛樂': '#c084fc',
       '生活雜項': '#94a3b8',
-      '他人轉帳': '#4ade80'
+      '他人轉帳': '#4ade80',
+      '薪水入帳': '#22c55e'
     };
 
     function loadConfig() {
@@ -413,8 +415,10 @@
       const futureAllowanceRMB = remainingDays * (dailyHkd * rate);
 
       const records = getRecords();
-      let actualAssets = baseBalance;  // 1. 實際當前總資產 (手上真實擁有的現金)
-      let futureLockedNet = 0;        // 未來預定款淨額 (支出扣，收入補)
+      let actualAssets = baseBalance;     // 1. 實際當前總資產 (手上實體現金/銀行卡)
+      let externalIncome = 0;             // 計畫外額外實質收入 (他人轉帳等，薪水不計入以防重複計算)
+      let actualExpenses = 0;             // 實質已發生支出
+      let futureLockedNet = 0;            // 未來預定款項 (支出扣，收入補)
       let todayMealsTaken = 0;
 
       records.forEach(r => {
@@ -426,25 +430,38 @@
         const isToday = rDate.getTime() === today.getTime();
 
         if (!isFuture) {
-          // 已經發生的實質收支
-          if (r.type === 'expense') actualAssets -= valRMB;
-          if (r.type === 'income') actualAssets += valRMB;
+          // 已發生的實質收支
+          if (r.type === 'expense') {
+            actualAssets -= valRMB;
+            actualExpenses += valRMB;
+          } else if (r.type === 'income') {
+            actualAssets += valRMB;
+            // 關鍵區別：只有「他人轉帳」等額外收入才增加預計資產；「薪水入帳」不增加預計資產
+            if (r.category !== '薪水入帳') {
+              externalIncome += valRMB;
+            }
+          }
         } else {
-          // 未來預定收支
+          // 未來預約/排程收支
           if (r.type === 'expense') futureLockedNet += valRMB;
-          if (r.type === 'income') futureLockedNet -= valRMB;
+          if (r.type === 'income') {
+            // 未來排程的他人轉帳也計入
+            if (r.category !== '薪水入帳') {
+              futureLockedNet -= valRMB;
+            }
+          }
         }
 
-        // 今日已吃正餐數統計 (背後運算用)
+        // 今日已吃正餐數統計
         if (isToday && r.type === 'expense' && r.category === '正餐主食') {
           todayMealsTaken++;
         }
       });
 
-      // 2. 預計剩餘總資產 = 實際總資產 + 未來發放加給 - 未來預定款淨扣
-      const expectedTotalAssets = actualAssets + futureAllowanceRMB - futureLockedNet;
+      // 2. 預計剩餘總資產 = 初始本金 + 出發前預估加給 + 計畫外他人轉帳 - 已發生支出 - 未來預定淨扣款
+      const expectedTotalAssets = baseBalance + futureAllowanceRMB + externalIncome - actualExpenses - futureLockedNet;
 
-      // 剩餘餐數計算
+      // 剩餘餐數動態計算
       const todayMealsRemaining = Math.max(0, 3 - todayMealsTaken);
       let totalMealsRemaining = 0;
       if (remainingDays > 1) {
@@ -454,7 +471,7 @@
       }
       totalMealsRemaining = Math.max(1, totalMealsRemaining);
 
-      // 用於吃喝平攤的生活費 = 預計總資產 - 旅遊基金
+      // 每餐配額 = (預計剩餘總資產 - 旅遊基金) / 剩餘總餐數
       const netBudgetForFood = expectedTotalAssets - tripFund;
       const mealBudget = netBudgetForFood > 0 ? (netBudgetForFood / totalMealsRemaining) : 0;
 
@@ -462,7 +479,6 @@
       document.getElementById('mealBudgetDisplay').innerText = `¥ ${mealBudget.toFixed(1)}`;
       document.getElementById('mealsRemainingDisplay').innerText = `距出發剩餘 ${remainingDays} 天 · 剩餘 ${totalMealsRemaining} 餐配額`;
       
-      // 雙軌資產更新
       document.getElementById('actualTotalAssetsDisplay').innerText = `¥ ${Math.round(actualAssets)}`;
       document.getElementById('expectedTotalAssetsDisplay').innerText = `¥ ${Math.round(expectedTotalAssets)}`;
       
