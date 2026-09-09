@@ -173,7 +173,7 @@
     <div class="card hero-card">
       <div class="hero-label">每餐剩餘配額 (由流動資金池平攤)</div>
       <div class="hero-value" id="mealBudgetDisplay">¥ 0.0</div>
-      <div class="hero-sub" id="mealsRemainingDisplay">週期總共 0 天 · 剩餘 0 天 · 剩餘 0 餐配額</div>
+      <div class="hero-sub" id="mealsRemainingDisplay">週期共 0 天 · 剩餘 0 天 · 剩餘 0 餐配額</div>
     </div>
 
     <!-- 三大資金池即時監控 -->
@@ -183,11 +183,11 @@
         <div class="metric-val highlight-blue" id="liquidFundDisplay">¥ 0</div>
       </div>
       <div class="metric-box">
-        <div class="metric-title">🛡️ 剩餘初始底金 (防超額)</div>
+        <div class="metric-title">🛡️ 剩餘初始底金 (超額實扣)</div>
         <div class="metric-val highlight-orange" id="safeBaseFundDisplay">¥ 0</div>
       </div>
       <div class="metric-box">
-        <div class="metric-title">💵 實際戶頭總金額</div>
+        <div class="metric-title">💵 實際戶頭總金額 (當前現金)</div>
         <div class="metric-val highlight-green" id="actualAccountDisplay">¥ 0</div>
       </div>
       <div class="metric-box">
@@ -198,7 +198,7 @@
 
     <!-- 新增收支面板 -->
     <div class="card">
-      <div class="record-title" style="margin-bottom: 8px;">新增收支項目</div>
+      <div class="record-title" style="margin-bottom: 8px;">新增收支項目 (支援預約未來收支)</div>
       <div class="row">
         <div class="form-group" style="flex: 0.8;">
           <label>類型</label>
@@ -221,7 +221,7 @@
 
       <div class="row">
         <div class="form-group">
-          <label>日期</label>
+          <label>日期 (可選未來日期試算)</label>
           <input type="date" id="txDate" />
         </div>
         <div class="form-group">
@@ -241,10 +241,10 @@
 
       <div class="form-group">
         <label>備註說明</label>
-        <input type="text" id="txRemark" placeholder="例：晚餐麵食、買飲料、朋友還款" />
+        <input type="text" id="txRemark" placeholder="例：預約下週高鐵票、晚餐大餐、朋友還錢" />
       </div>
 
-      <button class="btn-primary" id="addTxBtn">記入帳本並動態試算</button>
+      <button class="btn-primary" id="addTxBtn">記入帳本並即時試算</button>
     </div>
 
     <!-- 月度支出分析與圓餅圖 -->
@@ -399,12 +399,12 @@
       calculate();
     }
 
-    // 核心三池算力引擎（精確天數修正版）
+    // 核心三池算力引擎 (優先扣流動資金 + 未來收支即時平攤)
     function calculate() {
       saveConfig();
       const rate = parseFloat(document.getElementById('rateInput').value) || 1.0;
-      const initialDeposit = parseFloat(document.getElementById('baseBalanceInput').value) || 0; // 1400
-      const tripFund = parseFloat(document.getElementById('tripFundInput').value) || 0;          // 200
+      const initialDeposit = parseFloat(document.getElementById('baseBalanceInput').value) || 0; // 例: 1400
+      const tripFund = parseFloat(document.getElementById('tripFundInput').value) || 0;          // 例: 200
       const dailyAllowance = (parseFloat(document.getElementById('dailyHkdInput').value) || 300) * rate; // 300
       
       const startDate = new Date(document.getElementById('startDateInput').value);
@@ -414,7 +414,7 @@
       startDate.setHours(0, 0, 0, 0);
       tripDate.setHours(0, 0, 0, 0);
 
-      // 1. 週期天數計算：9/9 到 9/12，出發日當天不計，實算 (9/12 - 9/9) = 3 天
+      // 1. 週期天數計算：出發日不計，9/9 到 9/12 實算 3 天
       const totalCycleDays = Math.max(1, Math.round((tripDate - startDate) / (1000 * 60 * 60 * 24)));
       const cycleAllowance = totalCycleDays * dailyAllowance; // 3 * 300 = 900
 
@@ -423,13 +423,13 @@
       // 初始生活流動資金 (900 - 200 = 700)
       const initialLiquidFund = Math.max(0, cycleAllowance - tripFund);
 
-      // 2. 距出發剩餘天數：出發日當天不計
-      // 若今天為 9/9，距出發剩 3 天；若今天為 9/10，距出發剩 2 天
+      // 2. 距出發剩餘天數 (出發日不計)
       const remainingDays = Math.max(0, Math.round((tripDate - today) / (1000 * 60 * 60 * 24)));
 
       const records = getRecords();
-      let actualAccount = initialDeposit; // 實際戶頭總額
-      let dailyExpensesMap = {};          // 按日期記錄每日總開銷
+      let actualAccount = initialDeposit; // 當前實際戶頭現金 (只扣已發生收支)
+      let totalBudgetExpenses = 0;        // 納入預算平攤的支出總額 (包含今天與未來預約支出)
+      let totalBudgetExtraIncome = 0;     // 納入預算平攤的額外收入 (他人轉帳等，薪水除外)
       let todayMealsTaken = 0;
 
       records.forEach(r => {
@@ -439,42 +439,43 @@
         const isFuture = rDate > today;
         const isToday = rDate.getTime() === today.getTime();
 
-        // 實際戶頭資金隨實質收支增減
+        // 實際戶頭總金額：只結算已發生的真實款項
         if (!isFuture) {
-          if (r.type === 'expense') {
-            actualAccount -= valRMB;
-            dailyExpensesMap[r.date] = (dailyExpensesMap[r.date] || 0) + valRMB;
-          }
-          if (r.type === 'income') {
-            actualAccount += valRMB;
-          }
+          if (r.type === 'expense') actualAccount -= valRMB;
+          if (r.type === 'income')  actualAccount += valRMB;
         }
 
         // 今日吃正餐統計
         if (isToday && r.type === 'expense' && r.category === '正餐主食') {
           todayMealsTaken++;
         }
+
+        // 🌟 核心新邏輯：不管是今天還是未來款項，直接納入平攤試算 🌟
+        if (r.type === 'expense') {
+          totalBudgetExpenses += valRMB;
+        } else if (r.type === 'income') {
+          // 薪水實發僅加戶頭，他人轉帳/代墊還款才增加生活流動資金
+          if (r.category !== '薪水入帳') {
+            totalBudgetExtraIncome += valRMB;
+          }
+        }
       });
 
-      // 3. 超額消耗初始底金計算 (某天總花銷超過 300 時，超出部分動到底金)
-      let totalOverspentBase = 0;
-      let totalNormalExpenses = 0;
+      // 3. 優先從流動資金扣除；流動資金扣到 0 後，再扣初始底金
+      const effectiveLiquidPool = initialLiquidFund + totalBudgetExtraIncome; // 總可用流動池
+      let remainingLiquid = 0;
+      let remainingSafeBase = initialSafeBase;
 
-      for (let dateStr in dailyExpensesMap) {
-        const daySpent = dailyExpensesMap[dateStr];
-        if (daySpent > dailyAllowance) {
-          totalOverspentBase += (daySpent - dailyAllowance);
-          totalNormalExpenses += dailyAllowance;
-        } else {
-          totalNormalExpenses += daySpent;
-        }
+      if (totalBudgetExpenses <= effectiveLiquidPool) {
+        // 流動資金足夠扣除所有支出 (包含未來預約款)
+        remainingLiquid = effectiveLiquidPool - totalBudgetExpenses;
+        remainingSafeBase = initialSafeBase; // 底金完好無損
+      } else {
+        // 流動資金已經歸零，超出的部分開始實扣初始底金
+        remainingLiquid = 0;
+        const overspentAmt = totalBudgetExpenses - effectiveLiquidPool;
+        remainingSafeBase = Math.max(0, initialSafeBase - overspentAmt);
       }
-
-      // 剩餘初始底金 (500 - 超標部分)
-      const remainingSafeBase = Math.max(0, initialSafeBase - totalOverspentBase);
-
-      // 剩餘生活流動資金 (700 - 額度內正常開銷)
-      const remainingLiquid = Math.max(0, initialLiquidFund - totalNormalExpenses);
 
       // 4. 剩餘總餐數計算
       const todayMealsRemaining = Math.max(0, 3 - todayMealsTaken);
@@ -488,7 +489,7 @@
       }
       totalMealsRemaining = Math.max(1, totalMealsRemaining);
 
-      // 5. 每餐配額 = 剩餘流動資金 / 剩餘總餐數
+      // 5. 每餐配額 = 剩餘流動資金 / 剩餘總餐數 (若流動資金為 0 則配額為 0)
       const mealBudget = remainingLiquid > 0 ? (remainingLiquid / totalMealsRemaining) : 0;
 
       // 介面渲染更新
@@ -532,7 +533,7 @@
             <div>
               <strong>${r.remark}</strong>
               ${isMeal ? '<span class="record-badge badge-meal">正餐</span>' : ''}
-              ${isFuture ? '<span class="record-badge badge-future">預定款</span>' : ''}
+              ${isFuture ? '<span class="record-badge badge-future">預定款(已算入平攤)</span>' : ''}
             </div>
             <div class="record-tag">${r.date} · ${r.category}</div>
           </div>
