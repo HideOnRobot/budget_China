@@ -231,7 +231,7 @@
             <option value="交通住宿">🚄 交通住宿</option>
             <option value="社交娛樂">🎉 社交娛樂</option>
             <option value="生活雜項">📦 生活雜項</option>
-            <option value="他人轉帳">💸 他人轉帳/代墊還款 (增加預計總資產)</option>
+            <option value="他人轉帳">💸 他人轉帳/期初現金/代墊還款</option>
             <option value="薪水入帳">💼 薪水/加給實發 (僅加現金，不重複計入)</option>
           </select>
         </div>
@@ -239,7 +239,7 @@
 
       <div class="form-group">
         <label>備註說明</label>
-        <input type="text" id="txRemark" placeholder="例：早餐小籠包、朋友還高鐵錢、10月前半加給" />
+        <input type="text" id="txRemark" placeholder="例：期初帶來現金、小籠包、朋友還款" />
       </div>
 
       <button class="btn-primary" id="addTxBtn">記入帳本並動態平攤</button>
@@ -268,7 +268,7 @@
     <!-- 基礎設定與備份 (可摺疊) -->
     <div class="card">
       <details>
-        <summary>⚙️ 基礎參數設定 (起算日/加給/旅遊預算)</summary>
+        <summary>⚙️ 基礎參數設定 (日期/加給/旅遊預算)</summary>
         <div style="margin-top: 10px;">
           <div class="row">
             <div class="form-group">
@@ -282,22 +282,18 @@
           </div>
           <div class="row">
             <div class="form-group">
-              <label>初始基底本金 (RMB)</label>
-              <input type="number" id="baseBalanceInput" value="1000" />
-            </div>
-            <div class="form-group">
               <label>旅遊預定保留款 (RMB)</label>
               <input type="number" id="tripFundInput" value="2500" />
+            </div>
+            <div class="form-group">
+              <label>換匯匯率估算 (HKD 換 RMB)</label>
+              <input type="number" id="rateInput" value="0.92" step="0.01" />
             </div>
           </div>
           <div class="row">
             <div class="form-group">
               <label>每日在陸加給 (HKD)</label>
               <input type="number" id="dailyHkdInput" value="300" />
-            </div>
-            <div class="form-group">
-              <label>換匯匯率估算 (HKD 換 RMB)</label>
-              <input type="number" id="rateInput" value="0.92" step="0.01" />
             </div>
           </div>
 
@@ -340,7 +336,7 @@
       if (saved) {
         try {
           const cfg = JSON.parse(saved);
-          ['startDateInput','tripDateInput','baseBalanceInput','tripFundInput','dailyHkdInput','rateInput'].forEach(k => {
+          ['startDateInput','tripDateInput','tripFundInput','dailyHkdInput','rateInput'].forEach(k => {
             if (cfg[k] !== undefined) document.getElementById(k).value = cfg[k];
           });
         } catch(e) {}
@@ -349,7 +345,7 @@
 
     function saveConfig() {
       const cfg = {};
-      ['startDateInput','tripDateInput','baseBalanceInput','tripFundInput','dailyHkdInput','rateInput'].forEach(k => {
+      ['startDateInput','tripDateInput','tripFundInput','dailyHkdInput','rateInput'].forEach(k => {
         cfg[k] = document.getElementById(k).value;
       });
       localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
@@ -401,7 +397,6 @@
     function calculate() {
       saveConfig();
       const rate = parseFloat(document.getElementById('rateInput').value) || 0.92;
-      const baseBalance = parseFloat(document.getElementById('baseBalanceInput').value) || 0;
       const tripFund = parseFloat(document.getElementById('tripFundInput').value) || 0;
       const dailyHkd = parseFloat(document.getElementById('dailyHkdInput').value) || 0;
       
@@ -415,10 +410,8 @@
       const futureAllowanceRMB = remainingDays * (dailyHkd * rate);
 
       const records = getRecords();
-      let actualAssets = baseBalance;     // 1. 實際當前總資產 (手上實體現金/銀行卡)
-      let externalIncome = 0;             // 計畫外額外實質收入 (他人轉帳等，薪水不計入以防重複計算)
-      let actualExpenses = 0;             // 實質已發生支出
-      let futureLockedNet = 0;            // 未來預定款項 (支出扣，收入補)
+      let actualAssets = 0;        // 1. 當前實際總資產 (所有實質收入 - 所有實質支出)
+      let futureLockedNet = 0;     // 未來預定淨支出
       let todayMealsTaken = 0;
 
       records.forEach(r => {
@@ -430,26 +423,13 @@
         const isToday = rDate.getTime() === today.getTime();
 
         if (!isFuture) {
-          // 已發生的實質收支
-          if (r.type === 'expense') {
-            actualAssets -= valRMB;
-            actualExpenses += valRMB;
-          } else if (r.type === 'income') {
-            actualAssets += valRMB;
-            // 關鍵區別：只有「他人轉帳」等額外收入才增加預計資產；「薪水入帳」不增加預計資產
-            if (r.category !== '薪水入帳') {
-              externalIncome += valRMB;
-            }
-          }
+          // 已發生的實質收支 -> 直接決定口袋真實現金
+          if (r.type === 'expense') actualAssets -= valRMB;
+          if (r.type === 'income')  actualAssets += valRMB;
         } else {
-          // 未來預約/排程收支
+          // 未來預定排程款項
           if (r.type === 'expense') futureLockedNet += valRMB;
-          if (r.type === 'income') {
-            // 未來排程的他人轉帳也計入
-            if (r.category !== '薪水入帳') {
-              futureLockedNet -= valRMB;
-            }
-          }
+          if (r.type === 'income')  futureLockedNet -= valRMB;
         }
 
         // 今日已吃正餐數統計
@@ -458,8 +438,8 @@
         }
       });
 
-      // 2. 預計剩餘總資產 = 初始本金 + 出發前預估加給 + 計畫外他人轉帳 - 已發生支出 - 未來預定淨扣款
-      const expectedTotalAssets = baseBalance + futureAllowanceRMB + externalIncome - actualExpenses - futureLockedNet;
+      // 2. 預計剩餘總資產 = 當前實際總資產 + 到出發日預估取得的全部補貼 - 未來預排扣款
+      const expectedTotalAssets = actualAssets + futureAllowanceRMB - futureLockedNet;
 
       // 剩餘餐數動態計算
       const todayMealsRemaining = Math.max(0, 3 - todayMealsTaken);
@@ -685,7 +665,7 @@
       });
     }
 
-    ['startDateInput','tripDateInput','baseBalanceInput','tripFundInput','dailyHkdInput','rateInput'].forEach(id => {
+    ['startDateInput','tripDateInput','tripFundInput','dailyHkdInput','rateInput'].forEach(id => {
       document.getElementById(id).addEventListener('input', calculate);
     });
 
