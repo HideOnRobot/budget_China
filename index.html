@@ -47,7 +47,7 @@
     }
     .hero-label { font-size: 0.85rem; color: var(--text-sub); }
     .hero-value { font-size: 2.3rem; font-weight: 800; color: var(--accent-green); margin: 4px 0; }
-    .hero-sub { font-size: 0.8rem; color: var(--text-sub); }
+    .hero-sub { font-size: 0.85rem; color: var(--accent); font-weight: 600; }
 
     .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .metric-box {
@@ -115,6 +115,7 @@
       background: #475569;
       margin-left: 4px;
     }
+    .badge-meal { background: #0284c7; color: #e0f2fe; }
     .badge-future { background: #b45309; color: #fef3c7; }
     .record-right { display: flex; align-items: center; gap: 8px; }
     .record-amt { font-weight: 700; font-size: 0.95rem; }
@@ -136,16 +137,8 @@
       gap: 12px;
       margin-top: 8px;
     }
-    canvas {
-      max-width: 180px;
-      max-height: 180px;
-    }
-    .stat-list {
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
+    canvas { max-width: 180px; max-height: 180px; }
+    .stat-list { width: 100%; display: flex; flex-direction: column; gap: 6px; }
     .stat-item {
       display: flex;
       justify-content: space-between;
@@ -176,20 +169,20 @@
 
     <!-- 核心算力卡片 -->
     <div class="card hero-card">
-      <div class="hero-label">在出發旅遊前・每餐預算配額</div>
+      <div class="hero-label">在出發旅遊前・每餐剩餘配額</div>
       <div class="hero-value" id="mealBudgetDisplay">¥ 0.0</div>
-      <div class="hero-sub" id="dailyTotalDisplay">每日可用餐費：¥ 0.0 (以1天3餐計算)</div>
+      <div class="hero-sub" id="mealsRemainingDisplay">距出發剩餘 0 天 · 共剩 0 餐可吃</div>
     </div>
 
     <!-- 財務指標儀表板 -->
     <div class="card metric-grid">
       <div class="metric-box">
-        <div class="metric-title">目前累計實質餘額 (RMB)</div>
+        <div class="metric-title">目前實質餘額 (RMB)</div>
         <div class="metric-val highlight-blue" id="currentRealBalanceDisplay">¥ 0</div>
       </div>
       <div class="metric-box">
-        <div class="metric-title">距出發旅遊剩餘天數</div>
-        <div class="metric-val highlight-orange" id="remainingDaysDisplay">0 天</div>
+        <div class="metric-title">今日已吃正餐</div>
+        <div class="metric-val highlight-orange" id="todayMealsCountDisplay">0 / 3 餐</div>
       </div>
       <div class="metric-box">
         <div class="metric-title">待發放加給預估 (RMB)</div>
@@ -232,25 +225,26 @@
         <div class="form-group">
           <label>分類</label>
           <select id="txCategory">
-            <option value="餐飲日常">餐飲日常</option>
-            <option value="大型購物">大型購物 (如包包)</option>
-            <option value="交通住宿">交通住宿</option>
-            <option value="社交娛樂">社交娛樂</option>
-            <option value="生活雜項">生活雜項</option>
-            <option value="他人轉帳">他人轉帳/還款</option>
+            <option value="正餐主食">🍱 正餐主食 (扣餐數)</option>
+            <option value="點心飲料">☕ 點心飲料 (純扣額度)</option>
+            <option value="大型購物">🛍️ 大型購物 (如包包)</option>
+            <option value="交通住宿">🚄 交通住宿</option>
+            <option value="社交娛樂">🎉 社交娛樂</option>
+            <option value="生活雜項">📦 生活雜項</option>
+            <option value="他人轉帳">💸 他人轉帳/還款</option>
           </select>
         </div>
       </div>
 
       <div class="form-group">
         <label>備註說明</label>
-        <input type="text" id="txRemark" placeholder="例：晚餐、預定高鐵票、朋友還錢" />
+        <input type="text" id="txRemark" placeholder="例：早餐小籠包、下午茶奶茶、高鐵票" />
       </div>
 
-      <button class="btn-primary" id="addTxBtn">記入帳本並重新試算</button>
+      <button class="btn-primary" id="addTxBtn">記入帳本並動態平攤</button>
     </div>
 
-    <!-- 🌟 新功能：月度支出分析與圓餅圖 🌟 -->
+    <!-- 月度支出分析與圓餅圖 -->
     <div class="card">
       <div class="record-header">
         <div class="record-title">📊 每月支出分析</div>
@@ -258,9 +252,7 @@
       </div>
       <div class="chart-container">
         <canvas id="pieChart" width="200" height="200"></canvas>
-        <div class="stat-list" id="statBreakdown">
-          <!-- 動態渲染各類別金額與占比 -->
-        </div>
+        <div class="stat-list" id="statBreakdown"></div>
       </div>
     </div>
 
@@ -324,7 +316,6 @@
     const CONFIG_KEY = 'hk_expat_config_v2';
     const RECORDS_KEY = 'hk_expat_records_v2';
 
-    // 預設日期
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
     const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -332,9 +323,9 @@
     document.getElementById('txDate').value = todayStr;
     document.getElementById('statMonth').value = currentMonthStr;
 
-    // 分類顏色盤
     const CATEGORY_COLORS = {
-      '餐飲日常': '#38bdf8', // 亮藍
+      '正餐主食': '#38bdf8', // 亮藍
+      '點心飲料': '#e879f9', // 粉紫
       '大型購物': '#f87171', // 珊瑚紅
       '交通住宿': '#fb923c', // 暖橘
       '社交娛樂': '#c084fc', // 紫色
@@ -371,7 +362,6 @@
       localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
     }
 
-    // 新增記帳
     document.getElementById('addTxBtn').addEventListener('click', () => {
       const amt = parseFloat(document.getElementById('txAmount').value);
       if (!amt || amt <= 0) {
@@ -398,7 +388,6 @@
       calculate();
     });
 
-    // 刪除紀錄
     function deleteRecord(id) {
       let records = getRecords();
       records = records.filter(r => r.id !== id);
@@ -406,7 +395,7 @@
       calculate();
     }
 
-    // 核心計算
+    // 核心動態算力引擎
     function calculate() {
       saveConfig();
       const rate = parseFloat(document.getElementById('rateInput').value) || 0.92;
@@ -419,12 +408,14 @@
       today.setHours(0, 0, 0, 0);
       tripDate.setHours(0, 0, 0, 0);
 
+      // 剩餘日曆天數 (包含今天)
       const remainingDays = Math.max(1, Math.round((tripDate - today) / (1000 * 60 * 60 * 24)));
       const futureAllowanceRMB = remainingDays * (dailyHkd * rate);
 
       const records = getRecords();
       let realBalance = baseBalance;
       let futureLockedNet = 0;
+      let todayMealsTaken = 0;
 
       records.forEach(r => {
         const valRMB = r.currency === 'HKD' ? (r.amount * rate) : r.amount;
@@ -432,6 +423,7 @@
         rDate.setHours(0, 0, 0, 0);
 
         const isFuture = rDate > today;
+        const isToday = rDate.getTime() === today.getTime();
 
         if (!isFuture) {
           if (r.type === 'expense') realBalance -= valRMB;
@@ -440,17 +432,37 @@
           if (r.type === 'expense') futureLockedNet += valRMB;
           if (r.type === 'income') futureLockedNet -= valRMB;
         }
+
+        // 統計今天吃了幾次正餐主食
+        if (isToday && r.type === 'expense' && r.category === '正餐主食') {
+          todayMealsTaken++;
+        }
       });
 
+      // 今日剩餘餐數（上限 3 餐，若吃了 1 餐剩 2 餐，若吃了 3 餐剩 0 餐）
+      const todayMealsRemaining = Math.max(0, 3 - todayMealsTaken);
+
+      // 總剩餘可吃餐數 = 未來天數 (不含今天) * 3 + 今天剩餘餐數
+      // 如果剩餘天數是 1 天 (今天即最後一天)，總餐數即 todayMealsRemaining
+      let totalMealsRemaining = 0;
+      if (remainingDays > 1) {
+        totalMealsRemaining = (remainingDays - 1) * 3 + todayMealsRemaining;
+      } else {
+        totalMealsRemaining = todayMealsRemaining;
+      }
+      // 避免除以 0
+      totalMealsRemaining = Math.max(1, totalMealsRemaining);
+
       const netBudgetForFood = (realBalance + futureAllowanceRMB) - tripFund - futureLockedNet;
-      const dailyBudget = netBudgetForFood > 0 ? (netBudgetForFood / remainingDays) : 0;
-      const mealBudget = dailyBudget / 3;
+      
+      // 每餐動態配額 = 總生活費 / 剩餘總餐數
+      const mealBudget = netBudgetForFood > 0 ? (netBudgetForFood / totalMealsRemaining) : 0;
 
       // 介面更新
       document.getElementById('mealBudgetDisplay').innerText = `¥ ${mealBudget.toFixed(1)}`;
-      document.getElementById('dailyTotalDisplay').innerText = `每日可用餐費：¥ ${dailyBudget.toFixed(1)} (距出發還有 ${remainingDays} 天)`;
+      document.getElementById('mealsRemainingDisplay').innerText = `距出發剩餘 ${remainingDays} 天 · 剩餘 ${totalMealsRemaining} 餐配額`;
       document.getElementById('currentRealBalanceDisplay').innerText = `¥ ${Math.round(realBalance)}`;
-      document.getElementById('remainingDaysDisplay').innerText = `${remainingDays} 天`;
+      document.getElementById('todayMealsCountDisplay').innerText = `${Math.min(3, todayMealsTaken)} / 3 餐`;
       document.getElementById('futureAllowanceDisplay').innerText = `¥ ${Math.round(futureAllowanceRMB)}`;
       document.getElementById('futureExpensesDisplay').innerText = `¥ ${Math.round(futureLockedNet)}`;
 
@@ -458,7 +470,6 @@
       updateMonthlyStats(records, rate);
     }
 
-    // 渲染收支明細
     function renderRecordList(records, today) {
       const listEl = document.getElementById('recordList');
       document.getElementById('recordCount').innerText = records.length;
@@ -473,6 +484,7 @@
         const rDate = new Date(r.date);
         rDate.setHours(0, 0, 0, 0);
         const isFuture = rDate > today;
+        const isMeal = r.category === '正餐主食';
         
         const item = document.createElement('div');
         item.className = 'record-item';
@@ -485,6 +497,7 @@
           <div class="record-left">
             <div>
               <strong>${r.remark}</strong>
+              ${isMeal ? '<span class="record-badge badge-meal">正餐</span>' : ''}
               ${isFuture ? '<span class="record-badge badge-future">預定款</span>' : ''}
             </div>
             <div class="record-tag">${r.date} · ${r.category}</div>
@@ -500,7 +513,6 @@
       });
     }
 
-    // 🌟 原生 Canvas 圓餅圖與月度統計 🌟
     function updateMonthlyStats(records, rate) {
       const selectedMonth = document.getElementById('statMonth').value;
       const breakdownEl = document.getElementById('statBreakdown');
@@ -508,7 +520,6 @@
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 篩選指定月份的「支出」項目
       const monthExpenses = records.filter(r => {
         return r.type === 'expense' && r.date.startsWith(selectedMonth);
       });
@@ -522,10 +533,8 @@
         totalExpense += valRMB;
       });
 
-      // 如果當月無支出
       if (totalExpense === 0) {
         breakdownEl.innerHTML = '<div style="text-align:center; color:var(--text-sub); font-size:0.8rem; padding: 8px;">該月份暫無支出紀錄</div>';
-        // 畫一個灰色空心圓
         ctx.beginPath();
         ctx.arc(100, 100, 75, 0, 2 * Math.PI);
         ctx.strokeStyle = '#334155';
@@ -534,7 +543,6 @@
         return;
       }
 
-      // 繪製圓餅圖 (環形圖 Donut Chart)
       let startAngle = -0.5 * Math.PI;
       const categories = Object.keys(catTotals);
 
@@ -548,7 +556,6 @@
         startAngle += sliceAngle;
       });
 
-      // 圓心顯示月總支出
       ctx.fillStyle = '#f8fafc';
       ctx.font = 'bold 16px sans-serif';
       ctx.textAlign = 'center';
@@ -559,9 +566,8 @@
       ctx.font = '10px sans-serif';
       ctx.fillText('月總支出', 100, 115);
 
-      // 渲染分類明細與占比清單
       breakdownEl.innerHTML = '';
-      categories.sort((a, b) => catTotals[b] - catTotals[a]); // 金額高到低排序
+      categories.sort((a, b) => catTotals[b] - catTotals[a]);
 
       categories.forEach(cat => {
         const amt = catTotals[cat];
@@ -584,10 +590,8 @@
       });
     }
 
-    // 監聽月份切換
     document.getElementById('statMonth').addEventListener('change', calculate);
 
-    // 捷徑備份與復原
     function getExportPayload() {
       return JSON.stringify({
         config: localStorage.getItem(CONFIG_KEY),
