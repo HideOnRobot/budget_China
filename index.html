@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="外派記帳" />
-  <title>外派動態預算與雙軌資產監控</title>
+  <title>外派動態預算 & 資金分池模型</title>
   <style>
     :root {
       --bg: #0f172a;
@@ -18,6 +18,7 @@
       --accent-green: #4ade80;
       --accent-orange: #fb923c;
       --accent-red: #f87171;
+      --accent-purple: #c084fc;
       --border: #475569;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -63,6 +64,7 @@
     .highlight-orange { color: var(--accent-orange); }
     .highlight-blue { color: var(--accent); }
     .highlight-red { color: var(--accent-red); }
+    .highlight-purple { color: var(--accent-purple); }
 
     .form-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
     .form-group:last-child { margin-bottom: 0; }
@@ -165,38 +167,38 @@
 </head>
 <body>
   <div class="container">
-    <h1>外派記帳 & 雙軌資產監控</h1>
+    <h1>外派記帳 & 資金分池模型</h1>
 
-    <!-- 核心算力卡片 -->
+    <!-- 核心每餐可用配額 (由流動資金池計算) -->
     <div class="card hero-card">
-      <div class="hero-label">在出發旅遊前・每餐剩餘配額</div>
+      <div class="hero-label">每餐剩餘配額 (由流動資金池平攤)</div>
       <div class="hero-value" id="mealBudgetDisplay">¥ 0.0</div>
-      <div class="hero-sub" id="mealsRemainingDisplay">距出發剩餘 0 天 · 剩餘 0 餐可吃</div>
+      <div class="hero-sub" id="mealsRemainingDisplay">距出發剩餘 0 天 · 剩餘 0 餐配額</div>
     </div>
 
-    <!-- 🌟 新增：實際資產 vs 預計剩餘總資產 雙軌儀表板 🌟 -->
+    <!-- 三大資金池即時監控 -->
     <div class="card metric-grid">
       <div class="metric-box">
-        <div class="metric-title">💵 當前實際總資產 (口袋現金)</div>
-        <div class="metric-val highlight-blue" id="actualTotalAssetsDisplay">¥ 0</div>
+        <div class="metric-title">🌊 剩餘流動資金</div>
+        <div class="metric-val highlight-blue" id="liquidFundDisplay">¥ 0</div>
       </div>
       <div class="metric-box">
-        <div class="metric-title">📈 預計剩餘總資產 (含加給)</div>
-        <div class="metric-val highlight-green" id="expectedTotalAssetsDisplay">¥ 0</div>
+        <div class="metric-title">🛡️ 剩餘初始底金 (防超額)</div>
+        <div class="metric-val highlight-orange" id="safeBaseFundDisplay">¥ 0</div>
       </div>
       <div class="metric-box">
-        <div class="metric-title">待發放加給預估 (出發日前)</div>
-        <div class="metric-val" id="futureAllowanceDisplay">¥ 0</div>
+        <div class="metric-title">💵 實際戶頭總金額</div>
+        <div class="metric-val highlight-green" id="actualAccountDisplay">¥ 0</div>
       </div>
       <div class="metric-box">
-        <div class="metric-title">已預扣未來款項 (RMB)</div>
-        <div class="metric-val highlight-red" id="futureExpensesDisplay">¥ 0</div>
+        <div class="metric-title">✈️ 鎖定旅遊專款</div>
+        <div class="metric-val highlight-purple" id="tripLockedDisplay">¥ 0</div>
       </div>
     </div>
 
     <!-- 新增收支面板 -->
     <div class="card">
-      <div class="record-title" style="margin-bottom: 8px;">新增收支 / 預定款項</div>
+      <div class="record-title" style="margin-bottom: 8px;">新增收支項目</div>
       <div class="row">
         <div class="form-group" style="flex: 0.8;">
           <label>類型</label>
@@ -219,29 +221,30 @@
 
       <div class="row">
         <div class="form-group">
-          <label>日期 (可設未來預計付款)</label>
+          <label>日期</label>
           <input type="date" id="txDate" />
         </div>
         <div class="form-group">
           <label>分類</label>
           <select id="txCategory">
             <option value="正餐主食">🍱 正餐主食 (扣餐數)</option>
-            <option value="點心飲料">☕ 點心飲料 (純扣額度)</option>
-            <option value="大型購物">🛍️ 大型購物 (如包包)</option>
+            <option value="點心飲料">☕ 點心飲料 (純扣流動額度)</option>
+            <option value="大型購物">🛍️ 大型購物</option>
             <option value="交通住宿">🚄 交通住宿</option>
             <option value="社交娛樂">🎉 社交娛樂</option>
             <option value="生活雜項">📦 生活雜項</option>
-            <option value="他人轉帳">💸 他人轉帳/薪水入帳</option>
+            <option value="他人轉帳">💸 他人轉帳/代墊還款</option>
+            <option value="薪水入帳">💼 薪水實發 (僅加戶頭)</option>
           </select>
         </div>
       </div>
 
       <div class="form-group">
         <label>備註說明</label>
-        <input type="text" id="txRemark" placeholder="例：早餐小籠包、發薪入帳、預定高鐵" />
+        <input type="text" id="txRemark" placeholder="例：晚餐麵食、買飲料、朋友還款" />
       </div>
 
-      <button class="btn-primary" id="addTxBtn">記入帳本並動態平攤</button>
+      <button class="btn-primary" id="addTxBtn">記入帳本並動態試算</button>
     </div>
 
     <!-- 月度支出分析與圓餅圖 -->
@@ -256,7 +259,7 @@
       </div>
     </div>
 
-    <!-- 收支與預定明細 -->
+    <!-- 收支明細 -->
     <div class="card">
       <div class="record-header">
         <div class="record-title">收支明細清單 (<span id="recordCount">0</span>)</div>
@@ -264,39 +267,39 @@
       <div class="record-list" id="recordList"></div>
     </div>
 
-    <!-- 基礎設定與備份 (可摺疊) -->
+    <!-- 基礎設定 (可摺疊) -->
     <div class="card">
       <details>
-        <summary>⚙️ 基礎參數設定 (起算日/加給/旅遊預算)</summary>
+        <summary>⚙️ 基礎參數設定 (初始本金/起算日/旅遊款)</summary>
         <div style="margin-top: 10px;">
           <div class="row">
             <div class="form-group">
-              <label>起算日 (抵達大陸)</label>
-              <input type="date" id="startDateInput" value="2026-10-12" />
+              <label>起算日 (到大陸那天)</label>
+              <input type="date" id="startDateInput" value="2026-09-09" />
             </div>
             <div class="form-group">
               <label>預計出發旅遊日</label>
-              <input type="date" id="tripDateInput" value="2026-11-12" />
+              <input type="date" id="tripDateInput" value="2026-09-12" />
             </div>
           </div>
           <div class="row">
             <div class="form-group">
-              <label>初始基底本金 (RMB)</label>
-              <input type="number" id="baseBalanceInput" value="1000" />
+              <label>帶到大陸的初始本金 (RMB)</label>
+              <input type="number" id="baseBalanceInput" value="1400" />
             </div>
             <div class="form-group">
               <label>旅遊預定保留款 (RMB)</label>
-              <input type="number" id="tripFundInput" value="2500" />
+              <input type="number" id="tripFundInput" value="200" />
             </div>
           </div>
           <div class="row">
             <div class="form-group">
-              <label>每日在陸加給 (HKD)</label>
+              <label>每日在陸津貼 (HKD)</label>
               <input type="number" id="dailyHkdInput" value="300" />
             </div>
             <div class="form-group">
-              <label>換匯匯率估算 (HKD 換 RMB)</label>
-              <input type="number" id="rateInput" value="0.92" step="0.01" />
+              <label>匯率估算 (1 RMB = 1 HKD 時填 1)</label>
+              <input type="number" id="rateInput" value="1" step="0.01" />
             </div>
           </div>
 
@@ -330,7 +333,8 @@
       '交通住宿': '#fb923c',
       '社交娛樂': '#c084fc',
       '生活雜項': '#94a3b8',
-      '他人轉帳': '#4ade80'
+      '他人轉帳': '#4ade80',
+      '薪水入帳': '#22c55e'
     };
 
     function loadConfig() {
@@ -395,56 +399,83 @@
       calculate();
     }
 
-    // 核心動態算力引擎
+    // 核心三池算力引擎
     function calculate() {
       saveConfig();
-      const rate = parseFloat(document.getElementById('rateInput').value) || 0.92;
-      const baseBalance = parseFloat(document.getElementById('baseBalanceInput').value) || 0;
-      const tripFund = parseFloat(document.getElementById('tripFundInput').value) || 0;
-      const dailyHkd = parseFloat(document.getElementById('dailyHkdInput').value) || 0;
+      const rate = parseFloat(document.getElementById('rateInput').value) || 1.0;
+      const initialDeposit = parseFloat(document.getElementById('baseBalanceInput').value) || 0; // 例: 1400
+      const tripFund = parseFloat(document.getElementById('tripFundInput').value) || 0;          // 例: 200
+      const dailyAllowance = (parseFloat(document.getElementById('dailyHkdInput').value) || 300) * rate; // 例: 300 RMB
       
+      const startDate = new Date(document.getElementById('startDateInput').value);
       const tripDate = new Date(document.getElementById('tripDateInput').value);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
+      startDate.setHours(0, 0, 0, 0);
       tripDate.setHours(0, 0, 0, 0);
 
-      // 剩餘日曆天數 (包含今天)
+      // 1. 週期天數計算 (9/9 ~ 9/12 共 3 天)
+      const totalCycleDays = Math.max(1, Math.round((tripDate - startDate) / (1000 * 60 * 60 * 24)));
+      const cycleAllowance = totalCycleDays * dailyAllowance; // 3 * 300 = 900
+
+      // 初始安全底金 (1400 - 900 = 500)
+      const initialSafeBase = Math.max(0, initialDeposit - cycleAllowance);
+      // 初始生活流動資金 (900 - 200 = 700)
+      const initialLiquidFund = Math.max(0, cycleAllowance - tripFund);
+
+      // 距出發剩餘天數 (包含今天)
       const remainingDays = Math.max(1, Math.round((tripDate - today) / (1000 * 60 * 60 * 24)));
-      const futureAllowanceRMB = remainingDays * (dailyHkd * rate);
 
       const records = getRecords();
-      let actualAssets = baseBalance;  // 1. 實際當前總資產 (手上真實擁有的現金)
-      let futureLockedNet = 0;        // 未來預定款淨額 (支出扣，收入補)
+      let actualAccount = initialDeposit; // 實際戶頭總額
+      let dailyExpensesMap = {};          // 按日期記錄每日總開銷
       let todayMealsTaken = 0;
 
       records.forEach(r => {
         const valRMB = r.currency === 'HKD' ? (r.amount * rate) : r.amount;
         const rDate = new Date(r.date);
         rDate.setHours(0, 0, 0, 0);
-
         const isFuture = rDate > today;
         const isToday = rDate.getTime() === today.getTime();
 
+        // 實際戶頭資金隨實質收支增減
         if (!isFuture) {
-          // 已經發生的實質收支
-          if (r.type === 'expense') actualAssets -= valRMB;
-          if (r.type === 'income') actualAssets += valRMB;
-        } else {
-          // 未來預定收支
-          if (r.type === 'expense') futureLockedNet += valRMB;
-          if (r.type === 'income') futureLockedNet -= valRMB;
+          if (r.type === 'expense') {
+            actualAccount -= valRMB;
+            dailyExpensesMap[r.date] = (dailyExpensesMap[r.date] || 0) + valRMB;
+          }
+          if (r.type === 'income') {
+            actualAccount += valRMB;
+          }
         }
 
-        // 今日已吃正餐數統計 (背後運算用)
+        // 今日吃正餐統計
         if (isToday && r.type === 'expense' && r.category === '正餐主食') {
           todayMealsTaken++;
         }
       });
 
-      // 2. 預計剩餘總資產 = 實際總資產 + 未來發放加給 - 未來預定款淨扣
-      const expectedTotalAssets = actualAssets + futureAllowanceRMB - futureLockedNet;
+      // 2. 超額消耗初始底金計算 (某天總花銷超過 300 時，超出部分動到底金)
+      let totalOverspentBase = 0;
+      let totalNormalExpenses = 0;
 
-      // 剩餘餐數計算
+      for (let dateStr in dailyExpensesMap) {
+        const daySpent = dailyExpensesMap[dateStr];
+        if (daySpent > dailyAllowance) {
+          totalOverspentBase += (daySpent - dailyAllowance);
+          totalNormalExpenses += dailyAllowance;
+        } else {
+          totalNormalExpenses += daySpent;
+        }
+      }
+
+      // 剩餘初始底金 (500 - 超標部分)
+      const remainingSafeBase = Math.max(0, initialSafeBase - totalOverspentBase);
+
+      // 剩餘生活流動資金 (700 - 額度內正常開銷)
+      const remainingLiquid = Math.max(0, initialLiquidFund - totalNormalExpenses);
+
+      // 3. 剩餘總餐數計算
       const todayMealsRemaining = Math.max(0, 3 - todayMealsTaken);
       let totalMealsRemaining = 0;
       if (remainingDays > 1) {
@@ -454,20 +485,17 @@
       }
       totalMealsRemaining = Math.max(1, totalMealsRemaining);
 
-      // 用於吃喝平攤的生活費 = 預計總資產 - 旅遊基金
-      const netBudgetForFood = expectedTotalAssets - tripFund;
-      const mealBudget = netBudgetForFood > 0 ? (netBudgetForFood / totalMealsRemaining) : 0;
+      // 4. 每餐配額 = 剩餘流動資金 / 剩餘總餐數
+      const mealBudget = remainingLiquid > 0 ? (remainingLiquid / totalMealsRemaining) : 0;
 
-      // 介面渲染
+      // 介面渲染更新
       document.getElementById('mealBudgetDisplay').innerText = `¥ ${mealBudget.toFixed(1)}`;
       document.getElementById('mealsRemainingDisplay').innerText = `距出發剩餘 ${remainingDays} 天 · 剩餘 ${totalMealsRemaining} 餐配額`;
-      
-      // 雙軌資產更新
-      document.getElementById('actualTotalAssetsDisplay').innerText = `¥ ${Math.round(actualAssets)}`;
-      document.getElementById('expectedTotalAssetsDisplay').innerText = `¥ ${Math.round(expectedTotalAssets)}`;
-      
-      document.getElementById('futureAllowanceDisplay').innerText = `¥ ${Math.round(futureAllowanceRMB)}`;
-      document.getElementById('futureExpensesDisplay').innerText = `¥ ${Math.round(futureLockedNet)}`;
+
+      document.getElementById('liquidFundDisplay').innerText = `¥ ${Math.round(remainingLiquid)}`;
+      document.getElementById('safeBaseFundDisplay').innerText = `¥ ${Math.round(remainingSafeBase)}`;
+      document.getElementById('actualAccountDisplay').innerText = `¥ ${Math.round(actualAccount)}`;
+      document.getElementById('tripLockedDisplay').innerText = `¥ ${Math.round(tripFund)}`;
 
       renderRecordList(records, today);
       updateMonthlyStats(records, rate);
