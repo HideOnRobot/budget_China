@@ -198,7 +198,7 @@
         <div class="metric-val highlight-blue" id="liquidFundDisplay">¥ 0</div>
       </div>
       <div class="metric-box">
-        <div class="metric-title">🛡️ 剩餘初始底金 (超額實扣)</div>
+        <div class="metric-title">🛡️ 剩餘初始底金 (含薪水/超額實扣)</div>
         <div class="metric-val highlight-orange" id="safeBaseFundDisplay">¥ 0</div>
       </div>
       <div class="metric-box">
@@ -248,15 +248,14 @@
             <option value="交通住宿">🚄 交通住宿</option>
             <option value="社交娛樂">🎉 社交娛樂</option>
             <option value="生活雜項">📦 生活雜項</option>
-            <option value="他人轉帳">💸 他人轉帳/代墊還款</option>
-            <option value="薪水入帳">💼 薪水實發 (僅加戶頭)</option>
+            <option value="薪水入帳">💼 薪水實發 (加戶頭 & 底金)</option>
           </select>
         </div>
       </div>
 
       <div class="form-group">
         <label>備註說明</label>
-        <input type="text" id="txRemark" placeholder="例：早餐小籠包、沒吃早餐設0、下週預定正餐" />
+        <input type="text" id="txRemark" placeholder="例：早餐小籠包、沒吃早餐設0、發薪實發" />
       </div>
 
       <button class="btn-primary" id="addTxBtn">記入帳本並即時試算</button>
@@ -349,7 +348,6 @@
       '交通住宿': '#fb923c',
       '社交娛樂': '#c084fc',
       '生活雜項': '#94a3b8',
-      '他人轉帳': '#4ade80',
       '薪水入帳': '#22c55e'
     };
 
@@ -403,7 +401,6 @@
       const rawAmt = document.getElementById('txAmount').value;
       const amt = parseFloat(rawAmt);
 
-      // 支援輸入 0（代表沒吃早餐/斷食扣餐）
       if (isNaN(amt) || amt < 0) {
         alert('請輸入有效金額 (沒吃請填 0)');
         return;
@@ -435,7 +432,7 @@
       calculate();
     }
 
-    // 核心算力引擎（精準扣除所有今天與未來的正餐）
+    // 核心算力引擎
     function calculate() {
       saveConfig();
       const rate = parseFloat(document.getElementById('rateInput').value) || 1.0;
@@ -450,21 +447,21 @@
       startDate.setHours(0, 0, 0, 0);
       tripDate.setHours(0, 0, 0, 0);
 
-      // 1. 週期天數計算：出發日不計 (9/9 到 9/12 實算 3 天)
+      // 1. 週期天數：出發日不計
       const totalCycleDays = Math.max(1, Math.round((tripDate - startDate) / (1000 * 60 * 60 * 24)));
       const cycleAllowance = totalCycleDays * dailyAllowance;
 
-      const initialSafeBase = Math.max(0, initialDeposit - cycleAllowance);
+      const baseSafeFund = Math.max(0, initialDeposit - cycleAllowance);
       const initialLiquidFund = Math.max(0, cycleAllowance - tripFund);
 
-      // 2. 距出發剩餘天數 (包含今天，不含出發日)
+      // 2. 距出發剩餘天數
       const remainingDays = Math.max(0, Math.round((tripDate - today) / (1000 * 60 * 60 * 24)));
 
       const records = getRecords();
-      let actualAccount = initialDeposit; // 當前真實現金
-      let totalBudgetExpenses = 0;        // 總支出 (含今天與未來預約)
-      let totalBudgetExtraIncome = 0;     // 額外收入 (他人轉帳等)
-      let mealsConsumedCount = 0;         // 所有在「今天至出發日前」已記的正餐數 (含今天、未來與0元正餐)
+      let actualAccount = initialDeposit; // 當前現金
+      let totalBudgetExpenses = 0;        // 納入平攤的總支出
+      let totalSalaryIncome = 0;          // 薪水實發總額 (累加進底金)
+      let mealsConsumedCount = 0;         // 已消耗的正餐數
 
       records.forEach(r => {
         const valRMB = r.currency === 'HKD' ? (r.amount * rate) : r.amount;
@@ -473,53 +470,55 @@
 
         const isFuture = rDate > today;
 
-        // 實際戶頭總金額只扣今天及過去的款項
+        // 現金總額只反映過去與當天發生的實質款項
         if (!isFuture) {
           if (r.type === 'expense') actualAccount -= valRMB;
           if (r.type === 'income')  actualAccount += valRMB;
         }
 
-        // 🌟 精確扣除所有正餐（今天至出發日之間，不論是今天吃了、設為0元、還是預約未來）
+        // 正餐扣餐數 (今天至出發日前所有已記正餐，含 0 元)
         if (r.type === 'expense' && r.category === '正餐主食') {
           if (rDate >= today && rDate < tripDate) {
             mealsConsumedCount++;
           }
         }
 
-        // 不論今天或未來，款項一律納入平攤試算
+        // 支出平攤
         if (r.type === 'expense') {
           totalBudgetExpenses += valRMB;
-        } else if (r.type === 'income') {
-          if (r.category !== '薪水入帳') {
-            totalBudgetExtraIncome += valRMB;
-          }
+        } 
+        // 薪水入帳：累加進底金
+        else if (r.type === 'income' && r.category === '薪水入帳') {
+          totalSalaryIncome += valRMB;
         }
       });
 
-      // 3. 水位扣除：先扣流動資金，歸零後才扣初始底金
-      const effectiveLiquidPool = initialLiquidFund + totalBudgetExtraIncome;
-      let remainingLiquid = 0;
-      let remainingSafeBase = initialSafeBase;
+      // 初始底金加上實發薪水
+      const currentSafeBasePool = baseSafeFund + totalSalaryIncome;
 
-      if (totalBudgetExpenses <= effectiveLiquidPool) {
-        remainingLiquid = effectiveLiquidPool - totalBudgetExpenses;
-        remainingSafeBase = initialSafeBase;
+      // 3. 先扣流動資金，歸零後才扣底金
+      let remainingLiquid = 0;
+      let remainingSafeBase = currentSafeBasePool;
+
+      if (totalBudgetExpenses <= initialLiquidFund) {
+        remainingLiquid = initialLiquidFund - totalBudgetExpenses;
+        remainingSafeBase = currentSafeBasePool;
       } else {
         remainingLiquid = 0;
-        const overspentAmt = totalBudgetExpenses - effectiveLiquidPool;
-        remainingSafeBase = Math.max(0, initialSafeBase - overspentAmt);
+        const overspentAmt = totalBudgetExpenses - initialLiquidFund;
+        remainingSafeBase = Math.max(0, currentSafeBasePool - overspentAmt);
       }
 
-      // 4. 🌟 總剩餘配額計算：基準總餐數 = 剩餘天數 * 3，扣除所有已記錄的正餐（含0元）
+      // 4. 總剩餘配額計算 (基準 = 剩餘天數 * 3)
       const baseExpectedMeals = remainingDays * 3;
       const totalMealsRemaining = Math.max(1, baseExpectedMeals - mealsConsumedCount);
 
-      // 5. 每餐配額 = 剩餘流動資金 / 剩餘總餐數
+      // 5. 每餐配額
       const mealBudget = remainingLiquid > 0 ? (remainingLiquid / totalMealsRemaining) : 0;
 
-      // 介面渲染更新
+      // 介面更新 (副標題不顯示已消耗餐數)
       document.getElementById('mealBudgetDisplay').innerText = `¥ ${mealBudget.toFixed(1)}`;
-      document.getElementById('mealsRemainingDisplay').innerText = `週期共 ${totalCycleDays} 天 · 剩餘 ${remainingDays} 天 · 剩餘 ${totalMealsRemaining} 餐配額 (已消耗 ${mealsConsumedCount} 餐)`;
+      document.getElementById('mealsRemainingDisplay').innerText = `週期共 ${totalCycleDays} 天 · 剩餘 ${remainingDays} 天 · 剩餘 ${totalMealsRemaining} 餐配額`;
 
       document.getElementById('liquidFundDisplay').innerText = `¥ ${Math.round(remainingLiquid)}`;
       document.getElementById('safeBaseFundDisplay').innerText = `¥ ${Math.round(remainingSafeBase)}`;
@@ -545,6 +544,7 @@
         rDate.setHours(0, 0, 0, 0);
         const isFuture = rDate > today;
         const isMeal = r.category === '正餐主食';
+        const isSalary = r.category === '薪水入帳';
         const isZero = r.amount === 0;
         
         const item = document.createElement('div');
@@ -552,13 +552,14 @@
 
         const isExp = r.type === 'expense';
         const sign = isExp ? '-' : '+';
-        const amtColor = isZero ? 'var(--accent-green)' : (isExp ? 'var(--accent-orange)' : 'var(--accent-green)');
+        let amtColor = isZero ? 'var(--accent-green)' : (isExp ? 'var(--accent-orange)' : 'var(--accent-green)');
 
         item.innerHTML = `
           <div class="record-left">
             <div>
               <strong>${r.remark}</strong>
               ${isMeal ? (isZero ? '<span class="record-badge badge-zero">扣1餐配額(0元)</span>' : '<span class="record-badge badge-meal">正餐扣餐</span>') : ''}
+              ${isSalary ? '<span class="record-badge badge-zero">薪水入底金</span>' : ''}
               ${isFuture ? '<span class="record-badge badge-future">預定款(已算入)</span>' : ''}
             </div>
             <div class="record-tag">${r.date} · ${r.category}</div>
