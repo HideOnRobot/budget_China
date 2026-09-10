@@ -44,11 +44,20 @@
       background: linear-gradient(135deg, #1e293b, #09101f);
       border: 1.5px solid var(--accent);
       text-align: center;
-      padding: 18px 14px;
+      padding: 16px 14px;
     }
-    .hero-label { font-size: 0.85rem; color: var(--text-sub); }
-    .hero-value { font-size: 2.3rem; font-weight: 800; color: var(--accent-green); margin: 4px 0; }
-    .hero-sub { font-size: 0.85rem; color: var(--accent); font-weight: 600; }
+    .hero-label { font-size: 0.82rem; color: var(--text-sub); }
+    .hero-value { font-size: 2.1rem; font-weight: 800; color: var(--accent-green); margin: 3px 0; }
+    .hero-sub { font-size: 0.8rem; color: var(--accent); font-weight: 600; }
+
+    /* 發薪日前安全保命卡片 */
+    .payday-card {
+      background: linear-gradient(135deg, #1e293b, #172554);
+      border: 1.5px dashed var(--accent-orange);
+      text-align: center;
+      padding: 14px;
+    }
+    .payday-value { font-size: 1.8rem; font-weight: 800; color: var(--accent-orange); margin: 3px 0; }
 
     .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .metric-box {
@@ -61,7 +70,7 @@
       justify-content: space-between;
     }
     .metric-title { font-size: 0.72rem; color: var(--text-sub); margin-bottom: 2px; }
-    .formula-hint { font-size: 0.62rem; color: #38bdf8; opacity: 0.85; display: block; margin-top: 1px; }
+    .formula-hint { font-size: 0.6rem; color: #38bdf8; opacity: 0.85; display: block; margin-top: 1px; }
     .metric-val { font-size: 1.15rem; font-weight: 700; margin: 4px 0 2px 0; }
     
     .highlight-green { color: var(--accent-green); }
@@ -150,14 +159,7 @@
     }
     .btn-del:active { color: var(--accent-red); }
 
-    /* 月度統計樣式 */
-    .chart-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
-      margin-top: 8px;
-    }
+    .chart-container { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 8px; }
     canvas { max-width: 180px; max-height: 180px; }
     .stat-list { width: 100%; display: flex; flex-direction: column; gap: 6px; }
     .stat-item {
@@ -169,13 +171,7 @@
       border-radius: 6px;
       font-size: 0.82rem;
     }
-    .stat-color-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      display: inline-block;
-      margin-right: 6px;
-    }
+    .stat-color-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
 
     details { border-radius: 8px; }
     summary { font-size: 0.82rem; color: var(--text-sub); cursor: pointer; padding: 4px 0; outline: none; }
@@ -188,14 +184,21 @@
   <div class="container">
     <h1>外派記帳 & 資金分池模型</h1>
 
-    <!-- 核心每餐可用配額 -->
+    <!-- 1. 理論每餐配額 (含出發前預估津貼平攤) -->
     <div class="card hero-card">
-      <div class="hero-label">每餐剩餘配額 (由流動資金池平攤)</div>
+      <div class="hero-label">週期預估・每餐剩餘配額 (由流動資金平攤)</div>
       <div class="hero-value" id="mealBudgetDisplay">¥ 0.0</div>
       <div class="hero-sub" id="mealsRemainingDisplay">週期共 0 天 · 剩餘 0 天 · 剩餘 0 餐配額</div>
     </div>
 
-    <!-- 三大資金池即時監控 (帶公式標示) -->
+    <!-- 🌟 2. 新增：發薪日前 真實硬手頭每餐配額 (純扣戶頭實拿現金) 🌟 -->
+    <div class="card payday-card">
+      <div class="hero-label" style="color: #fdba74;">🚨 15號發薪前・真實手頭每餐配額 (僅用現有戶頭硬現金)</div>
+      <div class="payday-value" id="actualPaydayMealDisplay">¥ 0.0</div>
+      <div class="hero-sub" id="actualPaydaySubDisplay" style="color: #94a3b8;">距 15 號發薪剩 0 天 · 剩餘 0 餐配額</div>
+    </div>
+
+    <!-- 三大資金池即時監控 -->
     <div class="card metric-grid">
       <div class="metric-box">
         <div>
@@ -229,7 +232,7 @@
 
     <!-- 新增收支面板 -->
     <div class="card">
-      <div class="record-title" style="margin-bottom: 8px;">新增收支項目 (支援預約未來收支)</div>
+      <div class="record-title" style="margin-bottom: 8px;">新增收支項目</div>
       <div class="row">
         <div class="form-group" style="flex: 0.8;">
           <label>類型</label>
@@ -396,7 +399,6 @@
       localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
     }
 
-    // 快捷添加 0 元未吃正餐
     function quickAddZeroMeal() {
       const newRecord = {
         id: Date.now(),
@@ -448,7 +450,7 @@
       calculate();
     }
 
-    // 核心算力引擎
+    // 核心雙軌算力引擎
     function calculate() {
       saveConfig();
       const rate = parseFloat(document.getElementById('rateInput').value) || 1.0;
@@ -463,7 +465,7 @@
       startDate.setHours(0, 0, 0, 0);
       tripDate.setHours(0, 0, 0, 0);
 
-      // 1. 週期天數：出發日不計
+      // 1. 週期天數 (出發日不計)
       const totalCycleDays = Math.max(1, Math.round((tripDate - startDate) / (1000 * 60 * 60 * 24)));
       const cycleAllowance = totalCycleDays * dailyAllowance;
 
@@ -473,11 +475,22 @@
       // 2. 距出發剩餘天數
       const remainingDays = Math.max(0, Math.round((tripDate - today) / (1000 * 60 * 60 * 24)));
 
+      // 🌟 計算下一個 15 號發薪日 🌟
+      let nextPayday = new Date(today.getFullYear(), today.getMonth(), 15);
+      nextPayday.setHours(0, 0, 0, 0);
+      if (today.getDate() > 15) {
+        // 如果今天已過 15 號，對齊到下個月 15 號
+        nextPayday = new Date(today.getFullYear(), today.getMonth() + 1, 15);
+        nextPayday.setHours(0, 0, 0, 0);
+      }
+      const daysUntilPayday = Math.max(1, Math.round((nextPayday - today) / (1000 * 60 * 60 * 24)));
+
       const records = getRecords();
       let actualAccount = initialDeposit; // 當前現金
       let totalBudgetExpenses = 0;        // 納入平攤的總支出
-      let totalSalaryIncome = 0;          // 薪水實發總額 (累加進底金)
-      let mealsConsumedCount = 0;         // 已消耗的正餐數
+      let totalSalaryIncome = 0;          // 薪水實發總額
+      let mealsConsumedCount = 0;         // 週期內已消耗正餐
+      let mealsConsumedUntilPayday = 0;   // 15號前已消耗正餐
 
       records.forEach(r => {
         const valRMB = r.currency === 'HKD' ? (r.amount * rate) : r.amount;
@@ -486,33 +499,32 @@
 
         const isFuture = rDate > today;
 
-        // 現金總額只反映過去與當天發生的實質款項
         if (!isFuture) {
           if (r.type === 'expense') actualAccount -= valRMB;
           if (r.type === 'income')  actualAccount += valRMB;
         }
 
-        // 正餐扣餐數 (今天至出發日前所有已記正餐，含 0 元)
+        // 統計正餐消耗數
         if (r.type === 'expense' && r.category === '正餐主食') {
           if (rDate >= today && rDate < tripDate) {
             mealsConsumedCount++;
           }
+          if (rDate >= today && rDate < nextPayday) {
+            mealsConsumedUntilPayday++;
+          }
         }
 
-        // 支出平攤
         if (r.type === 'expense') {
           totalBudgetExpenses += valRMB;
-        } 
-        // 薪水入帳：累加進底金
-        else if (r.type === 'income' && r.category === '薪水入帳') {
+        } else if (r.type === 'income' && r.category === '薪水入帳') {
           totalSalaryIncome += valRMB;
         }
       });
 
-      // 初始底金加上實發薪水
+      // 初始底金 + 實發薪水
       const currentSafeBasePool = baseSafeFund + totalSalaryIncome;
 
-      // 3. 先扣流動資金，歸零後才扣底金
+      // 流動資金水位扣除
       let remainingLiquid = 0;
       let remainingSafeBase = currentSafeBasePool;
 
@@ -525,16 +537,25 @@
         remainingSafeBase = Math.max(0, currentSafeBasePool - overspentAmt);
       }
 
-      // 4. 總剩餘配額計算 (基準 = 剩餘天數 * 3)
+      // 4. 週期總配額計算 (含津貼平攤)
       const baseExpectedMeals = remainingDays * 3;
       const totalMealsRemaining = Math.max(1, baseExpectedMeals - mealsConsumedCount);
-
-      // 5. 每餐配額
       const mealBudget = remainingLiquid > 0 ? (remainingLiquid / totalMealsRemaining) : 0;
 
-      // 介面更新
+      // 🌟 5. 新增：到 15 號發薪日前，純用實際戶頭現錢算出的每餐配額 🌟
+      const paydayBaseMeals = daysUntilPayday * 3;
+      const paydayMealsRemaining = Math.max(1, paydayBaseMeals - mealsConsumedUntilPayday);
+      // 可用硬現金 = 實際戶頭總金額 - 預留旅費 (若旅費大於戶頭則以戶頭為限)
+      const netHardCashForFood = Math.max(0, actualAccount - tripFund);
+      const actualPaydayMealBudget = netHardCashForFood > 0 ? (netHardCashForFood / paydayMealsRemaining) : 0;
+
+      // 介面渲染
       document.getElementById('mealBudgetDisplay').innerText = `¥ ${mealBudget.toFixed(1)}`;
       document.getElementById('mealsRemainingDisplay').innerText = `週期共 ${totalCycleDays} 天 · 剩餘 ${remainingDays} 天 · 剩餘 ${totalMealsRemaining} 餐配額`;
+
+      // 渲染發薪前安全餐額
+      document.getElementById('actualPaydayMealDisplay').innerText = `¥ ${actualPaydayMealBudget.toFixed(1)}`;
+      document.getElementById('actualPaydaySubDisplay').innerText = `距 15 號發薪剩 ${daysUntilPayday} 天 · 剩餘 ${paydayMealsRemaining} 餐 · 扣除旅費後現有現金 ¥${Math.round(netHardCashForFood)}`;
 
       document.getElementById('liquidFundDisplay').innerText = `¥ ${Math.round(remainingLiquid)}`;
       document.getElementById('safeBaseFundDisplay').innerText = `¥ ${Math.round(remainingSafeBase)}`;
