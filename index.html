@@ -192,11 +192,11 @@
       <div class="hero-sub" id="mealsRemainingDisplay">週期共 0 天 · 剩餘 0 天 · 剩餘 0 餐配額</div>
     </div>
 
-    <!-- 2. 發薪前真實手頭每餐配額 -->
+    <!-- 2. 發薪前真實手頭每餐配額 (扣除預留款與目標存款) -->
     <div class="card payday-card">
-      <div class="hero-label" style="color: #fdba74;">🚨 15號發薪前・真實手頭每餐配額 (僅用現有戶頭硬現金)</div>
+      <div class="hero-label" style="color: #fdba74;">🚨 15號發薪前・真實手頭每餐配額 (已排除旅遊款與儲蓄)</div>
       <div class="payday-value" id="actualPaydayMealDisplay">¥ 0.0</div>
-      <div class="hero-sub" id="actualPaydaySubDisplay" style="color: #94a3b8;">距 15 號發薪剩 0 天 · 剩餘 0 餐配額</div>
+      <div class="hero-sub" id="actualPaydaySubDisplay" style="color: #94a3b8;">距 15 號發薪剩 0 天 · 剩餘 0 餐 · 可用硬現金 ¥0</div>
     </div>
 
     <!-- 三大資金池即時監控 -->
@@ -224,8 +224,8 @@
       </div>
       <div class="metric-box">
         <div>
-          <div class="metric-title">✈️ 鎖定旅遊專款</div>
-          <span class="formula-hint">(設定預留固定款)</span>
+          <div class="metric-title">🔒 鎖定專款(旅費+儲蓄)</div>
+          <span class="formula-hint">(旅遊預留款 + 強制儲蓄)</span>
         </div>
         <div class="metric-val highlight-purple" id="tripLockedDisplay">¥ 0</div>
       </div>
@@ -302,10 +302,10 @@
       <div class="record-list" id="recordList"></div>
     </div>
 
-    <!-- 基礎設定 (已修正手機版寬度溢出問題) -->
+    <!-- 基礎設定 (新增：強制儲蓄目標款) -->
     <div class="card">
       <details>
-        <summary>⚙️ 基礎參數設定 (初始本金/起算日/旅遊款)</summary>
+        <summary>⚙️ 基礎參數設定 (初始本金/起算日/儲蓄目標)</summary>
         <div style="margin-top: 10px;">
           <div class="row">
             <div class="form-group">
@@ -329,9 +329,15 @@
           </div>
           <div class="row">
             <div class="form-group">
+              <label>🎯 發薪前想存的錢 (RMB)</label>
+              <input type="number" id="savingsTargetInput" value="500" placeholder="不能動用的存款" />
+            </div>
+            <div class="form-group">
               <label>每日津貼 (HKD)</label>
               <input type="number" id="dailyHkdInput" value="300" />
             </div>
+          </div>
+          <div class="row">
             <div class="form-group">
               <label>匯率 (HKD 換 RMB)</label>
               <input type="number" id="rateInput" value="1" step="0.01" />
@@ -376,7 +382,7 @@
       if (saved) {
         try {
           const cfg = JSON.parse(saved);
-          ['startDateInput','tripDateInput','baseBalanceInput','tripFundInput','dailyHkdInput','rateInput'].forEach(k => {
+          ['startDateInput','tripDateInput','baseBalanceInput','tripFundInput','savingsTargetInput','dailyHkdInput','rateInput'].forEach(k => {
             if (cfg[k] !== undefined) document.getElementById(k).value = cfg[k];
           });
         } catch(e) {}
@@ -385,7 +391,7 @@
 
     function saveConfig() {
       const cfg = {};
-      ['startDateInput','tripDateInput','baseBalanceInput','tripFundInput','dailyHkdInput','rateInput'].forEach(k => {
+      ['startDateInput','tripDateInput','baseBalanceInput','tripFundInput','savingsTargetInput','dailyHkdInput','rateInput'].forEach(k => {
         cfg[k] = document.getElementById(k).value;
       });
       localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
@@ -456,6 +462,7 @@
       const rate = parseFloat(document.getElementById('rateInput').value) || 1.0;
       const initialDeposit = parseFloat(document.getElementById('baseBalanceInput').value) || 0; 
       const tripFund = parseFloat(document.getElementById('tripFundInput').value) || 0;          
+      const savingsTarget = parseFloat(document.getElementById('savingsTargetInput').value) || 0; // 想存的錢
       const dailyAllowance = (parseFloat(document.getElementById('dailyHkdInput').value) || 300) * rate; 
       
       const startDate = new Date(document.getElementById('startDateInput').value);
@@ -530,25 +537,29 @@
         remainingSafeBase = Math.max(0, currentSafeBasePool - overspentAmt);
       }
 
+      // 1. 週期每餐配額
       const baseExpectedMeals = remainingDays * 3;
       const totalMealsRemaining = Math.max(1, baseExpectedMeals - mealsConsumedCount);
       const mealBudget = remainingLiquid > 0 ? (remainingLiquid / totalMealsRemaining) : 0;
 
+      // 2. 發薪前真實手頭每餐配額 (扣除旅遊保留款與強制儲蓄金額)
       const paydayBaseMeals = daysUntilPayday * 3;
       const paydayMealsRemaining = Math.max(1, paydayBaseMeals - mealsConsumedUntilPayday);
-      const netHardCashForFood = Math.max(0, actualAccount - tripFund);
+      
+      const totalLockedFunds = tripFund + savingsTarget; // 鎖定款 = 旅費 + 存款
+      const netHardCashForFood = Math.max(0, actualAccount - totalLockedFunds);
       const actualPaydayMealBudget = netHardCashForFood > 0 ? (netHardCashForFood / paydayMealsRemaining) : 0;
 
       document.getElementById('mealBudgetDisplay').innerText = `¥ ${mealBudget.toFixed(1)}`;
       document.getElementById('mealsRemainingDisplay').innerText = `週期共 ${totalCycleDays} 天 · 剩餘 ${remainingDays} 天 · 剩餘 ${totalMealsRemaining} 餐配額`;
 
       document.getElementById('actualPaydayMealDisplay').innerText = `¥ ${actualPaydayMealBudget.toFixed(1)}`;
-      document.getElementById('actualPaydaySubDisplay').innerText = `距 15 號發薪剩 ${daysUntilPayday} 天 · 剩餘 ${paydayMealsRemaining} 餐 · 現有現金淨額 ¥${Math.round(netHardCashForFood)}`;
+      document.getElementById('actualPaydaySubDisplay').innerText = `距 15 號發薪剩 ${daysUntilPayday} 天 · 剩餘 ${paydayMealsRemaining} 餐 · 可用硬現金 ¥${Math.round(netHardCashForFood)} (已扣儲蓄¥${Math.round(savingsTarget)})`;
 
       document.getElementById('liquidFundDisplay').innerText = `¥ ${Math.round(remainingLiquid)}`;
       document.getElementById('safeBaseFundDisplay').innerText = `¥ ${Math.round(remainingSafeBase)}`;
       document.getElementById('actualAccountDisplay').innerText = `¥ ${Math.round(actualAccount)}`;
-      document.getElementById('tripLockedDisplay').innerText = `¥ ${Math.round(tripFund)}`;
+      document.getElementById('tripLockedDisplay').innerText = `¥ ${Math.round(totalLockedFunds)}`;
 
       renderRecordList(records, today);
       updateMonthlyStats(records, rate);
@@ -753,7 +764,7 @@
       });
     }
 
-    ['startDateInput','tripDateInput','baseBalanceInput','tripFundInput','dailyHkdInput','rateInput'].forEach(id => {
+    ['startDateInput','tripDateInput','baseBalanceInput','tripFundInput','savingsTargetInput','dailyHkdInput','rateInput'].forEach(id => {
       document.getElementById(id).addEventListener('input', calculate);
     });
 
