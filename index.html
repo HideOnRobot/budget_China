@@ -123,9 +123,27 @@
     }
     .btn-quick-zero:active { background: rgba(56, 189, 248, 0.15); }
 
-    .record-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    /* 明細與篩選區 */
+    .record-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px; }
     .record-title { font-size: 0.95rem; font-weight: 700; color: var(--text-main); }
-    .record-list { display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; }
+    .filter-wrap { display: flex; align-items: center; gap: 6px; }
+    .filter-date-input { width: 125px; padding: 4px 6px; font-size: 0.78rem; border-radius: 6px; }
+    .btn-clear-filter { padding: 4px 8px; font-size: 0.75rem; background: var(--card-inner); border: 1px solid var(--border); border-radius: 6px; color: var(--text-main); cursor: pointer; }
+
+    .record-list { display: flex; flex-direction: column; gap: 12px; max-height: 360px; overflow-y: auto; }
+    
+    /* 日期分組樣式 */
+    .day-group { display: flex; flex-direction: column; gap: 6px; }
+    .day-header {
+      font-size: 0.76rem;
+      color: var(--text-sub);
+      display: flex;
+      justify-content: space-between;
+      padding: 2px 4px;
+      border-bottom: 1px solid rgba(71, 85, 105, 0.4);
+    }
+    .day-total { color: var(--accent); font-weight: 600; }
+
     .record-item {
       background: var(--card-inner);
       border-radius: 8px;
@@ -134,8 +152,10 @@
       justify-content: space-between;
       align-items: center;
       font-size: 0.85rem;
+      gap: 8px;
     }
-    .record-left { display: flex; flex-direction: column; gap: 2px; }
+    .record-left { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .record-left strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .record-tag { font-size: 0.7rem; color: var(--text-sub); }
     .record-badge {
       display: inline-block;
@@ -148,15 +168,23 @@
     .badge-meal { background: #0284c7; color: #e0f2fe; }
     .badge-zero { background: #059669; color: #ecfdf5; }
     .badge-future { background: #b45309; color: #fef3c7; }
-    .record-right { display: flex; align-items: center; gap: 8px; }
-    .record-amt { font-weight: 700; font-size: 0.95rem; }
+    
+    /* 修正金額斷行 */
+    .record-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .record-amt { font-weight: 700; font-size: 0.92rem; white-space: nowrap; }
     .btn-del {
       background: transparent;
       border: none;
       color: var(--text-sub);
       font-size: 1rem;
       cursor: pointer;
-      padding: 2px 6px;
+      padding: 2px 4px;
     }
     .btn-del:active { color: var(--accent-red); }
 
@@ -192,7 +220,7 @@
       <div class="hero-sub" id="mealsRemainingDisplay">週期共 0 天 · 剩餘 0 天 · 剩餘 0 餐配額</div>
     </div>
 
-    <!-- 2. 發薪前真實手頭每餐配額 (扣除預留款與目標存款) -->
+    <!-- 2. 發薪前真實手頭每餐配額 -->
     <div class="card payday-card">
       <div class="hero-label" style="color: #fdba74;">🚨 15號發薪前・真實手頭每餐配額 (已排除旅遊款與儲蓄)</div>
       <div class="payday-value" id="actualPaydayMealDisplay">¥ 0.0</div>
@@ -294,15 +322,19 @@
       </div>
     </div>
 
-    <!-- 收支明細 -->
+    <!-- 收支明細 (支援日期查詢與按天分組) -->
     <div class="card">
       <div class="record-header">
-        <div class="record-title">收支明細清單 (<span id="recordCount">0</span>)</div>
+        <div class="record-title">收支明細 (<span id="recordCount">0</span>)</div>
+        <div class="filter-wrap">
+          <input type="date" id="filterDate" class="filter-date-input" title="選擇特定日期查看" />
+          <button type="button" class="btn-clear-filter" onclick="clearDateFilter()">全部</button>
+        </div>
       </div>
       <div class="record-list" id="recordList"></div>
     </div>
 
-    <!-- 基礎設定 (新增：強制儲蓄目標款) -->
+    <!-- 基礎設定 -->
     <div class="card">
       <details>
         <summary>⚙️ 基礎參數設定 (初始本金/起算日/儲蓄目標)</summary>
@@ -366,6 +398,8 @@
     
     document.getElementById('txDate').value = todayStr;
     document.getElementById('statMonth').value = currentMonthStr;
+
+    let selectedFilterDate = ''; // 查詢日期過濾
 
     const CATEGORY_COLORS = {
       '正餐主食': '#38bdf8',
@@ -457,12 +491,24 @@
       calculate();
     }
 
+    // 篩選特定日期
+    document.getElementById('filterDate').addEventListener('change', (e) => {
+      selectedFilterDate = e.target.value;
+      calculate();
+    });
+
+    function clearDateFilter() {
+      selectedFilterDate = '';
+      document.getElementById('filterDate').value = '';
+      calculate();
+    }
+
     function calculate() {
       saveConfig();
       const rate = parseFloat(document.getElementById('rateInput').value) || 1.0;
       const initialDeposit = parseFloat(document.getElementById('baseBalanceInput').value) || 0; 
       const tripFund = parseFloat(document.getElementById('tripFundInput').value) || 0;          
-      const savingsTarget = parseFloat(document.getElementById('savingsTargetInput').value) || 0; // 想存的錢
+      const savingsTarget = parseFloat(document.getElementById('savingsTargetInput').value) || 0; 
       const dailyAllowance = (parseFloat(document.getElementById('dailyHkdInput').value) || 300) * rate; 
       
       const startDate = new Date(document.getElementById('startDateInput').value);
@@ -537,16 +583,14 @@
         remainingSafeBase = Math.max(0, currentSafeBasePool - overspentAmt);
       }
 
-      // 1. 週期每餐配額
       const baseExpectedMeals = remainingDays * 3;
       const totalMealsRemaining = Math.max(1, baseExpectedMeals - mealsConsumedCount);
       const mealBudget = remainingLiquid > 0 ? (remainingLiquid / totalMealsRemaining) : 0;
 
-      // 2. 發薪前真實手頭每餐配額 (扣除旅遊保留款與強制儲蓄金額)
       const paydayBaseMeals = daysUntilPayday * 3;
       const paydayMealsRemaining = Math.max(1, paydayBaseMeals - mealsConsumedUntilPayday);
       
-      const totalLockedFunds = tripFund + savingsTarget; // 鎖定款 = 旅費 + 存款
+      const totalLockedFunds = tripFund + savingsTarget;
       const netHardCashForFood = Math.max(0, actualAccount - totalLockedFunds);
       const actualPaydayMealBudget = netHardCashForFood > 0 ? (netHardCashForFood / paydayMealsRemaining) : 0;
 
@@ -561,53 +605,94 @@
       document.getElementById('actualAccountDisplay').innerText = `¥ ${Math.round(actualAccount)}`;
       document.getElementById('tripLockedDisplay').innerText = `¥ ${Math.round(totalLockedFunds)}`;
 
-      renderRecordList(records, today);
+      renderRecordList(records, today, rate);
       updateMonthlyStats(records, rate);
     }
 
-    function renderRecordList(records, today) {
+    // 依日期分組渲染清單（支援日期過濾 + 單行金額防止跑版）
+    function renderRecordList(records, today, rate) {
       const listEl = document.getElementById('recordList');
-      document.getElementById('recordCount').innerText = records.length;
       listEl.innerHTML = '';
 
-      if (records.length === 0) {
-        listEl.innerHTML = '<div style="text-align:center; color:var(--text-sub); font-size:0.8rem; padding: 10px;">目前尚無紀錄</div>';
+      let displayRecords = records;
+      if (selectedFilterDate) {
+        displayRecords = records.filter(r => r.date === selectedFilterDate);
+      }
+      document.getElementById('recordCount').innerText = displayRecords.length;
+
+      if (displayRecords.length === 0) {
+        listEl.innerHTML = '<div style="text-align:center; color:var(--text-sub); font-size:0.8rem; padding: 16px;">查無相關收支紀錄</div>';
         return;
       }
 
-      records.forEach(r => {
-        const rDate = new Date(r.date);
-        rDate.setHours(0, 0, 0, 0);
-        const isFuture = rDate > today;
-        const isMeal = r.category === '正餐主食';
-        const isSalary = r.category === '薪水入帳';
-        const isZero = r.amount === 0;
-        
-        const item = document.createElement('div');
-        item.className = 'record-item';
+      // 按日期分組（由新到舊排序）
+      const grouped = {};
+      displayRecords.forEach(r => {
+        if (!grouped[r.date]) grouped[r.date] = [];
+        grouped[r.date].push(r);
+      });
 
-        const isExp = r.type === 'expense';
-        const sign = isExp ? '-' : '+';
-        let amtColor = isZero ? 'var(--accent-green)' : (isExp ? 'var(--accent-orange)' : 'var(--accent-green)');
+      const dates = Object.keys(grouped).sort((a, b) => new Date(b) - new Date(a));
 
-        item.innerHTML = `
-          <div class="record-left">
-            <div>
-              <strong>${r.remark}</strong>
-              ${isMeal ? (isZero ? '<span class="record-badge badge-zero">扣1餐配額(0元)</span>' : '<span class="record-badge badge-meal">正餐扣餐</span>') : ''}
-              ${isSalary ? '<span class="record-badge badge-zero">薪水入底金</span>' : ''}
-              ${isFuture ? '<span class="record-badge badge-future">預定款(已算入)</span>' : ''}
-            </div>
-            <div class="record-tag">${r.date} · ${r.category}</div>
-          </div>
-          <div class="record-right">
-            <span class="record-amt" style="color:${amtColor}">
-              ${sign}${r.amount} ${r.currency}
-            </span>
-            <button class="btn-del" onclick="deleteRecord(${r.id})">✕</button>
-          </div>
+      dates.forEach(dateStr => {
+        const groupEl = document.createElement('div');
+        groupEl.className = 'day-group';
+
+        // 計算該日總支出 (換算成 RMB)
+        let dayExpenseTotal = 0;
+        grouped[dateStr].forEach(r => {
+          if (r.type === 'expense') {
+            const val = r.currency === 'HKD' ? (r.amount * rate) : r.amount;
+            dayExpenseTotal += val;
+          }
+        });
+
+        // 日期組頂部小標題
+        const dayHeader = document.createElement('div');
+        dayHeader.className = 'day-header';
+        dayHeader.innerHTML = `
+          <span>📅 ${dateStr}</span>
+          <span class="day-total">當日支出：¥${Math.round(dayExpenseTotal)}</span>
         `;
-        listEl.appendChild(item);
+        groupEl.appendChild(dayHeader);
+
+        // 渲染當天明細項
+        grouped[dateStr].forEach(r => {
+          const rDate = new Date(r.date);
+          rDate.setHours(0, 0, 0, 0);
+          const isFuture = rDate > today;
+          const isMeal = r.category === '正餐主食';
+          const isSalary = r.category === '薪水入帳';
+          const isZero = r.amount === 0;
+
+          const item = document.createElement('div');
+          item.className = 'record-item';
+
+          const isExp = r.type === 'expense';
+          const sign = isExp ? '-' : '+';
+          let amtColor = isZero ? 'var(--accent-green)' : (isExp ? 'var(--accent-orange)' : 'var(--accent-green)');
+
+          item.innerHTML = `
+            <div class="record-left">
+              <div>
+                <strong>${r.remark}</strong>
+                ${isMeal ? (isZero ? '<span class="record-badge badge-zero">扣1餐配額(0元)</span>' : '<span class="record-badge badge-meal">正餐扣餐</span>') : ''}
+                ${isSalary ? '<span class="record-badge badge-zero">薪水入底金</span>' : ''}
+                ${isFuture ? '<span class="record-badge badge-future">預定款</span>' : ''}
+              </div>
+              <div class="record-tag">${r.category}</div>
+            </div>
+            <div class="record-right">
+              <span class="record-amt" style="color:${amtColor}">
+                ${sign}${r.amount} ${r.currency}
+              </span>
+              <button class="btn-del" onclick="deleteRecord(${r.id})">✕</button>
+            </div>
+          `;
+          groupEl.appendChild(item);
+        });
+
+        listEl.appendChild(groupEl);
       });
     }
 
